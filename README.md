@@ -1,4 +1,8 @@
 <p align="center">
+  <img src="docs/assets/ark-header.png" alt="Ark — open-source orchestration for island-native workflows" width="960" />
+</p>
+
+<p align="center">
   <strong>Ark</strong>
 </p>
 
@@ -15,6 +19,10 @@
   <a href="https://github.com/Zluowa/Ark/stargazers"><img src="https://img.shields.io/github/stars/Zluowa/Ark?style=flat" alt="Stars" /></a>
   <a href="https://github.com/Zluowa/Ark/actions/workflows/ci.yml"><img src="https://github.com/Zluowa/Ark/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <img src="https://img.shields.io/badge/platform-Windows-111111" alt="Windows" />
+</p>
+
+<p align="center">
+  <sub>Public, self-hosted, and built around the island itself.</sub>
 </p>
 
 <br/>
