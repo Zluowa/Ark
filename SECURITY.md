@@ -2,8 +2,8 @@
 
 ## Supported Use
 
-OmniAgent Island is designed to be self-hosted. Operators are responsible for their
-own provider keys, storage, and runtime isolation.
+Ark is designed to be self-hosted. Operators are responsible for their own
+provider keys, storage, and runtime isolation.
 
 ## Reporting A Vulnerability
 
