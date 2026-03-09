@@ -1,158 +1,179 @@
-# Ark
+<p align="center">
+  <strong>Ark</strong>
+</p>
 
-Open-source Dynamic Island tooling for capture, AI workflows, files, and a self-hosted operator console.
+<p align="center">
+  <a href="#quickstart"><strong>Quickstart</strong></a>
+  &middot;
+  <a href="docs/SELF_HOSTING.md"><strong>Docs</strong></a>
+  &middot;
+  <a href="https://github.com/Zluowa/Ark"><strong>GitHub</strong></a>
+</p>
 
-Ark combines three pieces in one repo:
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License" /></a>
+  <a href="https://github.com/Zluowa/Ark/stargazers"><img src="https://img.shields.io/github/stars/Zluowa/Ark?style=flat" alt="Stars" /></a>
+  <a href="https://github.com/Zluowa/Ark/actions/workflows/ci.yml"><img src="https://github.com/Zluowa/Ark/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <img src="https://img.shields.io/badge/platform-Windows-111111" alt="Windows" />
+</p>
 
-1. A native Windows Dynamic Island surface built in Rust
-2. A Next.js web console and public landing site
-3. Local-first services for files, jobs, and optional AI-powered capture workflows
+<br/>
 
-The project is designed to be reproducible by anyone. No hosted project key is bundled. Bring your own provider keys, or connect your own compatible gateway.
+## What is Ark?
 
-## Why This Repo Exists
+# Open-source orchestration for island-native workflows
 
-Ark is built for fast, low-friction actions:
+**If a dashboard is a _workspace_, Ark is the _surface_.**
 
-1. Capture audio and screen from the island
-2. Resume files and tool flows without reopening a full dashboard
-3. Hand results back to AI for summarization or further work
-4. Run the same stack locally with your own models, APIs, and storage
+Ark is a self-hosted stack that turns the Dynamic Island into a real execution surface for capture, files, editing, music, focus, and AI handoff. The repo combines a Rust-native Windows island runtime, a Next.js public site and dashboard, and optional local infra for state and artifacts.
 
-## What Ships Here
+**Manage workflows, not windows.**
 
-1. `desktop/island`
-   Windows-native Dynamic Island runtime, capture controls, file actions, music, focus, and tool surfaces
-2. `app`
-   Official website, operator dashboard, tool workbench, API routes, and self-hosted control plane entry
-3. `infra/docker-compose.yml`
-   Optional local infra for PostgreSQL, Redis, MinIO, and executor runtime
-4. `services/executor-fastapi`
-   Optional execution and artifact service used by the app stack
+|        | Step                   | Example                                                                 |
+| ------ | ---------------------- | ----------------------------------------------------------------------- |
+| **01** | Capture the signal     | Record audio, start screen capture, drop a file, open Studio, or resume |
+| **02** | Transform it in place  | Convert to text, edit images, reopen files, route into tools            |
+| **03** | Handoff with context   | Continue in AI, download artifacts, or reopen the right surface         |
+
+<br/>
+
+## Ark is right for you if
+
+- You want the Dynamic Island to be a real workflow surface, not just a status ornament
+- You capture audio, screen, files, or image edits and want the next action to happen from the same surface
+- You need a local-first stack with BYOK providers instead of a hosted black box
+- You want a public repo you can fork, self-host, and extend without an internal cleanup sprint first
+- You want one system that connects the island, dashboard, tools, and file handoff instead of isolated widgets
+
+<br/>
+
+## Features
+
+| | |
+| --- | --- |
+| **Audio Notes** | Record, convert to text, then continue the transcript through normal AI input instead of a dead export flow. |
+| **Screen Record** | Use countdown, recording, saving, and summary as island-native states instead of detached recorder windows. |
+| **Studio** | Background removal, watermark cleanup, and image edits stay on the island and reopen into the correct surface. |
+| **Files** | Recent artifacts are resumable. The stack reopens the right file workflow instead of dropping you into a dashboard maze. |
+| **NetEase** | Search, playback, and account connection live inside the same stack as the rest of the island capabilities. |
+| **Focus** | Pomodoro is a calm island state with next actions and AI handoff, not a separate productivity mini-app. |
+| **File-first AI handoff** | Reports, transcripts, captures, and edits materialize as files first, then continue through AI with explicit user intent. |
+| **Self-hosted stack** | The public site, dashboard, native island, and optional local infra all ship in one reproducible repo. |
+| **BYOK providers** | No project account is required. Use your own models, gateways, storage, and speech or video services. |
+
+<br/>
+
+## Problems Ark solves
+
+| Without Ark | With Ark |
+| --- | --- |
+| You keep bouncing between recorder windows, dashboards, and tool pages just to finish one small task. | Ark keeps the flow on the island so the next useful action is always one surface away. |
+| Audio, screenshots, and edits turn into dead files that still need manual cleanup, naming, and follow-up. | Captures and edits flow directly into files, transcripts, markdown reports, and AI handoff. |
+| Your desktop assistant looks polished, but the real work still happens somewhere else. | The island itself becomes the execution surface for recording, editing, playback, focus, and file resumption. |
+| Open-source release work turns into an internal cleanup project because docs, envs, and links are not public-safe. | Ark ships with BYOK env examples, GitHub community files, self-hosting docs, and a public landing page out of the box. |
+
+<br/>
+
+## Why Ark is special
+
+| | |
+| --- | --- |
+| **Surface-native orchestration** | Ark models the island as the product surface, not as a notification shell attached to a dashboard later. |
+| **File-first state transitions** | Reports, transcripts, captures, and edits become explicit artifacts that can be reopened, downloaded, or sent back into AI. |
+| **Resumable local state** | The stack can reopen music, files, studio, focus, and recent results with the right priority instead of guessing from stale state. |
+| **Provider portability** | OpenAI-compatible chat, Gemini video analysis, Volcengine ASR, and local infra stay configurable without changing the public contract. |
+| **Native + web in one repo** | Rust island runtime, Next.js dashboard, self-hosting docs, and optional infra are versioned together as one product. |
+| **Public-safe release posture** | The repo is meant to be pushed as-is: license, templates, CI, docs, source links, and no bundled project secrets. |
+
+<br/>
+
+## What Ark is not
+
+| | |
+| --- | --- |
+| **Not a generic widget gallery.** | The goal is not to showcase mini-components. The goal is to make the island itself the place where workflows continue. |
+| **Not a hosted-only SaaS shell.** | Ark is designed to be forked, self-hosted, and BYOK. Public copy cannot rely on private infra to make sense. |
+| **Not dashboard-first.** | The dashboard exists, but the product story starts from the island and radiates outward into files, tools, and docs. |
+| **Not a single narrow tool.** | Capture, editing, playback, files, focus, and AI handoff all belong to the same surface system. |
+
+<br/>
 
 ## Quickstart
 
-### Prerequisites
-
-1. Node.js 22+
-2. pnpm 10+
-3. Rust stable
-4. Docker Desktop or compatible Docker engine
-5. Windows 11 for the native island runtime
-
-### 1. Clone And Install
+Open source. Self-hosted. No Ark account required.
 
 ```bash
 git clone https://github.com/Zluowa/Ark.git
 cd Ark
 pnpm --dir app install
-```
-
-### 2. Configure Your Own Keys
-
-```bash
 cp app/.env.example app/.env.local
-```
-
-Then fill in only the providers you plan to use. Typical setups are:
-
-1. Chat and image generation: `OPENAI_API_KEY` or your own compatible gateway via `OMNIAGENT_RELAY_BASE_URL` + `OMNIAGENT_RELAY_API_KEY`
-2. Screen analysis: `GEMINI_API_KEY` or `GOOGLE_API_KEY`
-3. Audio transcription: `VOLCENGINE_APPID` + `VOLCENGINE_ACCESS_TOKEN`
-4. Web search: `TAVILY_API_KEY`
-
-All values are BYOK placeholders. No public example in this repo contains a real key.
-
-### 3. Start Optional Infra
-
-```bash
 docker compose -f infra/docker-compose.yml up -d
-```
-
-This brings up:
-
-1. PostgreSQL on `35432`
-2. Redis on `36379`
-3. MinIO on `39000`
-4. Executor FastAPI on `38080`
-
-### 4. Start The Web Console
-
-```bash
 pnpm --dir app dev
-```
-
-Open `http://127.0.0.1:3010`.
-
-### 5. Start The Native Island
-
-```bash
 cargo run --manifest-path desktop/Cargo.toml -p omniagent-island
 ```
 
-## Self-Hosting Model
+Typical BYOK providers:
 
-Ark is intentionally open and modular:
-
-1. Run the website alone
-2. Run the website plus local infra
-3. Run the website plus native island
-4. Swap providers and endpoints without changing the public contract
+1. Chat and image generation: `OPENAI_API_KEY` or your own compatible gateway
+2. Screen analysis: `GEMINI_API_KEY` or `GOOGLE_API_KEY`
+3. Audio transcription: `VOLCENGINE_APPID` plus `VOLCENGINE_ACCESS_TOKEN`
+4. Search: `TAVILY_API_KEY`
 
 Detailed setup lives in [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md).
 
-## Bring Your Own Keys
+<br/>
 
-This repository is public-safe by design:
+## FAQ
 
-1. No real API keys are committed
-2. No private relay URL is required
-3. No unrelated private project references are needed to boot the stack
-4. Credential storage is local-first
+**What does a typical Ark setup look like?**  
+The public site and dashboard run from Next.js, the island runtime runs locally on Windows, and optional Compose services add durable state and artifacts.
 
-If you publish the repo, do not replace placeholders with live keys. Keep secrets in your own environment or secret manager.
+**Do I need Ark-hosted accounts or project keys?**  
+No. The repo is BYOK. You bring your own model, speech, video, or storage providers and keep secrets in your own environment.
 
-## GitHub Readiness
+**Can I use just the website or just the island?**  
+Yes. The architecture is modular. You can run the website alone, the website plus local infra, or the full site-plus-native-island stack.
 
-The repo includes:
+**Why not just open a dashboard or a recorder app?**  
+Because Ark is optimized around fewer jumps. The point is to keep capture, AI, files, and resume actions on the smallest useful surface.
 
-1. `LICENSE`
-2. `CONTRIBUTING.md`
-3. `CODE_OF_CONDUCT.md`
-4. `SECURITY.md`
-5. `.github/ISSUE_TEMPLATE`
-6. `.github/workflows/ci.yml`
+<br/>
 
-That is enough to push the project to GitHub without a cleanup pass.
-
-## Development Commands
+## Development
 
 ```bash
 pnpm --dir app typecheck
 pnpm --dir app build
+cargo test --manifest-path desktop/Cargo.toml -p omniagent-island -j 1
 node scripts/check-task-delivery.mjs
 node scripts/check-task-delivery.mjs --require-ui
 ```
 
-## Architecture
+<br/>
 
-1. `app` exposes the public website, dashboard, API routes, and tool orchestration
-2. `desktop/island` renders the native shell and dispatches local actions
-3. `services/executor-fastapi` handles optional execution and artifact workflows
-4. `infra/docker-compose.yml` provides reproducible local dependencies
+## Roadmap
 
-## Publish Checklist
+- Unify more native island surfaces under one visual language
+- Continue reducing dashboard-first flows in favor of file-first and island-first handoff
+- Harden provider portability and self-hosting defaults
+- Improve public documentation and onboarding for forks
 
-Before creating a public GitHub repository:
+<br/>
 
-1. Review `app/.env.example`
-2. Confirm no `.env.local` or local state files are tracked
-3. Verify the website at `/` matches your public project name and links
-4. Set `NEXT_PUBLIC_OMNIAGENT_GITHUB_URL` to your repository URL
-5. Push the repo and enable the included CI workflow
+## Contributing
+
+We welcome contributions. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+<br/>
 
 ## Community
 
-1. Usage questions and ideas: open a GitHub Discussion or issue in your fork
-2. Security issues: follow [SECURITY.md](SECURITY.md)
-3. Contributions: follow [CONTRIBUTING.md](CONTRIBUTING.md)
+- GitHub Issues: https://github.com/Zluowa/Ark/issues
+- GitHub Discussions: https://github.com/Zluowa/Ark/discussions
+- Security policy: [SECURITY.md](SECURITY.md)
+
+<br/>
+
+## License
+
+MIT

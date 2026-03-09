@@ -1,27 +1,15 @@
 import Link from "next/link";
-import { ArrowUpRight, FileCode2, Github, Server } from "lucide-react";
+import { ArrowRight, ArrowUpRight, FileCode2, Github, Server } from "lucide-react";
 import { appConfig } from "@/lib/config/app-config";
 
-const steps = [
-  {
-    title: "1. Configure providers",
-    detail:
-      "Copy `app/.env.example` to `app/.env.local` and add only the providers you plan to use.",
-  },
-  {
-    title: "2. Start infra",
-    detail:
-      "Run `docker compose -f infra/docker-compose.yml up -d` when you want durable state and artifacts.",
-  },
-  {
-    title: "3. Run the app",
-    detail: "Start the public site and dashboard with `pnpm --dir app dev`.",
-  },
-  {
-    title: "4. Run the island",
-    detail:
-      "Start the native shell with `cargo run --manifest-path desktop/Cargo.toml -p omniagent-island` on Windows.",
-  },
+const quickstart = [
+  "git clone https://github.com/Zluowa/Ark.git",
+  "cd Ark",
+  "pnpm --dir app install",
+  "cp app/.env.example app/.env.local",
+  "docker compose -f infra/docker-compose.yml up -d",
+  "pnpm --dir app dev",
+  "cargo run --manifest-path desktop/Cargo.toml -p omniagent-island",
 ];
 
 const envGroups = [
@@ -53,79 +41,130 @@ const envGroups = [
   },
 ];
 
+const faq = [
+  {
+    question: "What is the smallest setup?",
+    answer:
+      "Run the web app alone with your own model keys, then add the native island or Compose services when you want the full product surface.",
+  },
+  {
+    question: "Do I need your hosted backend?",
+    answer:
+      "No. Ark is public-safe and BYOK. The repo is meant to make sense without our private infra.",
+  },
+  {
+    question: "Can I fork and rebrand it?",
+    answer:
+      "Yes. Update the source links, public copy, and env values in your own fork, then keep the same self-hosted contract.",
+  },
+  {
+    question: "What should I verify before publishing my fork?",
+    answer:
+      "Check placeholder-only env examples, source links, public docs, and homepage copy, then run typecheck, build, tests, and UI evidence.",
+  },
+];
+
 export default function OpenSourcePage() {
   return (
-    <main className="min-h-screen bg-[#f4f3ee] text-slate-950">
-      <div className="mx-auto flex max-w-6xl flex-col gap-16 px-6 py-14 lg:px-10">
-        <header className="grid gap-8 rounded-[2.5rem] bg-slate-950 px-8 py-10 text-white shadow-[0_30px_120px_rgba(15,23,42,0.28)] lg:grid-cols-[1.1fr_0.9fr]">
-          <div>
-            <p className="text-xs uppercase tracking-[0.28em] text-cyan-200/70">
-              Open source guide
-            </p>
-            <h1 className="mt-4 text-5xl font-semibold tracking-[-0.05em]">
-              Self-host the full island stack.
-            </h1>
-            <p className="mt-5 max-w-2xl text-base leading-8 text-slate-300">
-              This guide mirrors the public-safe setup for Ark: website,
-              dashboard, native island, optional infra, and BYOK providers.
-              No private project dependency is required.
-            </p>
-          </div>
-          <div className="rounded-[2rem] border border-white/10 bg-white/5 p-6">
-            <div className="space-y-4 text-sm text-slate-200">
-              <div className="flex items-center gap-3">
-                <Github className="size-4 text-cyan-300" />
-                <span>GitHub-ready repo hygiene included</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Server className="size-4 text-cyan-300" />
-                <span>Compose-based local infra</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <FileCode2 className="size-4 text-cyan-300" />
-                <span>Placeholder-only env examples</span>
-              </div>
-              <Link
-                href={appConfig.links.source}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-6 inline-flex items-center gap-2 rounded-full bg-cyan-300 px-4 py-2 font-medium text-slate-950"
-              >
-                View source
-                <ArrowUpRight className="size-4" />
-              </Link>
-            </div>
+    <main className="min-h-screen bg-[#f6f2e8] text-neutral-950">
+      <div className="h-3 bg-[linear-gradient(90deg,#6ed7ff_0%,#c6f36d_28%,#ffb867_58%,#ff84d4_100%)]" />
+
+      <div className="mx-auto flex max-w-6xl flex-col gap-16 px-6 py-12 lg:px-10">
+        <header className="max-w-4xl">
+          <p className="text-[11px] uppercase tracking-[0.28em] text-neutral-500">
+            Open source guide
+          </p>
+          <h1 className="mt-4 text-5xl font-semibold tracking-[-0.06em] sm:text-6xl">
+            Self-host the full island stack.
+          </h1>
+          <p className="mt-6 text-lg leading-8 text-neutral-600">
+            This is the public-safe quickstart for Ark: website, dashboard,
+            native island, optional local infra, and BYOK providers. No private
+            project dependency is required.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link
+              href={appConfig.links.source}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-full bg-black px-5 py-3 text-sm font-medium text-white transition hover:bg-neutral-800"
+            >
+              <Github className="size-4" />
+              View source
+              <ArrowUpRight className="size-4" />
+            </Link>
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-5 py-3 text-sm font-medium text-neutral-950 transition hover:border-black"
+            >
+              Back to homepage
+            </Link>
           </div>
         </header>
 
-        <section className="grid gap-5 lg:grid-cols-2">
-          {steps.map((step) => (
-            <article
-              key={step.title}
-              className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.06)]"
-            >
-              <h2 className="text-2xl font-semibold">{step.title}</h2>
-              <p className="mt-3 text-sm leading-7 text-slate-600">
-                {step.detail}
+        <section className="grid gap-8 lg:grid-cols-[1fr_1fr]">
+          <div className="overflow-hidden rounded-[2rem] border border-black/8 bg-[#0c0d10] text-white">
+            <div className="flex items-center justify-between border-b border-white/8 px-5 py-4 text-xs uppercase tracking-[0.22em] text-white/44">
+              <span>Quickstart</span>
+              <span>7 commands</span>
+            </div>
+            <div className="space-y-3 px-5 py-5 font-mono text-[13px] leading-7">
+              {quickstart.map((line) => (
+                <div key={line} className="rounded-2xl bg-white/6 px-4 py-3">
+                  {line}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid gap-4">
+            <article className="rounded-[1.8rem] border border-black/8 bg-white p-6">
+              <Github className="size-5" />
+              <h2 className="mt-4 text-xl font-semibold tracking-[-0.03em]">
+                GitHub-ready repo hygiene
+              </h2>
+              <p className="mt-3 text-sm leading-7 text-neutral-600">
+                README, license, CI, issue templates, security policy, docs, and
+                public landing page all ship as part of the default Ark repo.
               </p>
             </article>
-          ))}
+            <article className="rounded-[1.8rem] border border-black/8 bg-white p-6">
+              <Server className="size-5" />
+              <h2 className="mt-4 text-xl font-semibold tracking-[-0.03em]">
+                Compose-based local infra
+              </h2>
+              <p className="mt-3 text-sm leading-7 text-neutral-600">
+                PostgreSQL, Redis, MinIO, and the executor service are optional,
+                documented, and public-safe. They are not hidden runtime assumptions.
+              </p>
+            </article>
+            <article className="rounded-[1.8rem] border border-black/8 bg-white p-6">
+              <FileCode2 className="size-5" />
+              <h2 className="mt-4 text-xl font-semibold tracking-[-0.03em]">
+                Placeholder-only env examples
+              </h2>
+              <p className="mt-3 text-sm leading-7 text-neutral-600">
+                The public contract is BYOK. Docs and examples explain which keys
+                you can bring without exposing private credentials.
+              </p>
+            </article>
+          </div>
         </section>
 
-        <section className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
-          <p className="text-xs uppercase tracking-[0.28em] text-slate-500">
+        <section className="rounded-[2rem] border border-black/8 bg-white p-8">
+          <p className="text-[11px] uppercase tracking-[0.28em] text-neutral-500">
             Environment groups
           </p>
           <div className="mt-6 grid gap-5 lg:grid-cols-3">
             {envGroups.map((group) => (
               <article
                 key={group.title}
-                className="rounded-[1.8rem] bg-slate-950 px-5 py-6 text-slate-50"
+                className="rounded-[1.7rem] border border-black/8 bg-[#f7f3ea] p-5"
               >
-                <h3 className="text-lg font-semibold">{group.title}</h3>
-                <div className="mt-4 space-y-3 text-sm text-slate-300">
+                <h2 className="text-lg font-semibold">{group.title}</h2>
+                <div className="mt-4 space-y-3 text-sm text-neutral-700">
                   {group.lines.map((line) => (
-                    <div key={line} className="rounded-xl bg-white/5 px-3 py-2">
+                    <div key={line} className="rounded-xl bg-white px-3 py-2">
                       {line}
                     </div>
                   ))}
@@ -135,33 +174,38 @@ export default function OpenSourcePage() {
           </div>
         </section>
 
-        <section
-          id="github"
-          className="grid gap-6 rounded-[2.5rem] bg-[#dde7ec] p-8 lg:grid-cols-[1fr_1fr]"
-        >
+        <section className="grid gap-4 md:grid-cols-2">
+          {faq.map((item) => (
+            <article
+              key={item.question}
+              className="rounded-[1.8rem] border border-black/8 bg-white p-6"
+            >
+              <div className="text-lg font-semibold tracking-[-0.03em]">
+                {item.question}
+              </div>
+              <p className="mt-3 text-sm leading-7 text-neutral-600">
+                {item.answer}
+              </p>
+            </article>
+          ))}
+        </section>
+
+        <section className="flex flex-wrap items-center justify-between gap-4 rounded-[2rem] bg-[#111214] px-6 py-6 text-white">
           <div>
-            <p className="text-xs uppercase tracking-[0.28em] text-slate-500">
-              Publish checklist
-            </p>
-            <h2 className="mt-4 text-3xl font-semibold tracking-[-0.04em]">
-              Before you push this to GitHub
-            </h2>
-          </div>
-          <div className="space-y-3 text-sm text-slate-700">
-            <div className="rounded-2xl bg-white px-4 py-3">
-              Verify `app/.env.example` contains placeholders only.
+            <div className="text-2xl font-semibold tracking-[-0.04em]">
+              Ready to fork your own island stack?
             </div>
-            <div className="rounded-2xl bg-white px-4 py-3">
-              If you fork Ark, set `NEXT_PUBLIC_OMNIAGENT_GITHUB_URL` to your
-              actual repository.
-            </div>
-            <div className="rounded-2xl bg-white px-4 py-3">
-              Run `pnpm --dir app typecheck`, `pnpm --dir app build`, and Rust tests.
-            </div>
-            <div className="rounded-2xl bg-white px-4 py-3">
-              Review screenshots and logs for secrets, cookies, or private URLs.
+            <div className="mt-2 text-sm text-white/62">
+              Start from the public docs, then move into the dashboard and native runtime.
             </div>
           </div>
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950 transition hover:bg-neutral-200"
+          >
+            Open dashboard
+            <ArrowRight className="size-4" />
+          </Link>
         </section>
       </div>
     </main>

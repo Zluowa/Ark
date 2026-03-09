@@ -2,7 +2,13 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import {
   ArrowRight,
+  ArrowUpRight,
+  Bot,
+  CheckCircle2,
   Clock3,
+  Command,
+  FileStack,
+  FileText,
   FolderOpen,
   Github,
   Mic,
@@ -15,132 +21,205 @@ import {
 } from "lucide-react";
 import { appConfig } from "@/lib/config/app-config";
 
-type CapabilityTone =
-  | "cyan"
-  | "orange"
-  | "pink"
-  | "violet"
-  | "emerald"
-  | "amber";
-
-const showcaseCards = [
+const heroSurfaces = [
   {
-    tag: "Audio Notes",
+    label: "Audio Notes",
     title: "Record, transcribe, ask AI",
-    subtitle: "mp3 -> text -> Ask AI",
-    accent: "from-cyan-400/70 via-sky-400/30 to-transparent",
-    badge: "To Text",
-    meta: "Local capture + BYOK ASR",
+    detail: "mp3 -> text -> Ask AI",
+    chip: "To Text",
+    accent: "bg-cyan-300",
   },
   {
-    tag: "Screen Record",
-    title: "Stop recording, keep the story",
-    subtitle: "Video summary + markdown report",
-    accent: "from-orange-400/70 via-amber-300/35 to-transparent",
-    badge: "Saving",
-    meta: "Gemini or Google-compatible analysis",
+    label: "Screen Record",
+    title: "Stop once, keep the story",
+    detail: "countdown -> recording -> report.md",
+    chip: "Saving",
+    accent: "bg-amber-300",
   },
   {
-    tag: "Studio",
-    title: "Remove background without leaving the island",
-    subtitle: "Edit, outpaint, clean watermark",
-    accent: "from-fuchsia-400/70 via-pink-400/30 to-transparent",
-    badge: "Apply",
-    meta: "Tool-first creative workflow",
+    label: "Studio",
+    title: "Edit without leaving the island",
+    detail: "remove background, clean watermark, apply",
+    chip: "Apply",
+    accent: "bg-fuchsia-300",
   },
 ];
 
-const featureScenes: Array<{
-  title: string;
-  copy: string;
-  icon: ReactNode;
-  tone: CapabilityTone;
-  lines: string[];
-}> = [
+const worksWith = [
+  "OpenAI",
+  "Gemini",
+  "Volcengine",
+  "ffmpeg",
+  "Rust",
+  "Next.js",
+];
+
+const orchestrationSteps = [
+  {
+    step: "01",
+    title: "Capture the signal",
+    copy:
+      "Start from the island itself: audio notes, screen recording, image editing, music, files, or focus.",
+  },
+  {
+    step: "02",
+    title: "Transform it in place",
+    copy:
+      "Convert files, transcribe recordings, resume recent artifacts, or hand the current state to a tool without reopening the whole app.",
+  },
+  {
+    step: "03",
+    title: "Handoff with context",
+    copy:
+      "Push the result back into AI, files, or the dashboard with the right context already attached.",
+  },
+];
+
+const fitList = [
+  "You want the Dynamic Island to be a real workflow surface, not just a status ornament.",
+  "You capture audio, screen, files, or image edits and want the next action to happen from the same surface.",
+  "You need a local-first stack with BYOK providers instead of a hosted black box.",
+  "You want a public repo you can fork, self-host, and keep hacking on without internal cleanup first.",
+  "You want one system that connects the island, dashboard, tools, and file handoff instead of isolated widgets.",
+];
+
+const featureCards = [
   {
     title: "Audio Notes",
     copy:
-      "Capture a thought, hand it to speech-to-text, and continue the transcript as a live AI document.",
+      "Record, convert to text, then continue the transcript through normal AI input instead of a dead export flow.",
     icon: <Mic className="size-5" />,
-    tone: "cyan",
-    lines: ["recording 02:14", "to text", "ask ai"],
   },
   {
     title: "Screen Record",
     copy:
-      "Screen capture turns into an explainable artifact instead of a dead clip. Stop once, summarize once, ship once.",
+      "Use countdown, recording, saving, and summary as island-native states instead of detached recorder windows.",
     icon: <MonitorPlay className="size-5" />,
-    tone: "orange",
-    lines: ["countdown", "recording", "report.md"],
   },
   {
     title: "Studio",
     copy:
-      "Image editing stays surface-native: remove background, clean watermarks, outpaint, and route results back into tools.",
+      "Background removal, watermark cleanup, and image edits stay on the island and reopen into the correct surface.",
     icon: <WandSparkles className="size-5" />,
-    tone: "pink",
-    lines: ["remove background", "mask optional", "apply"],
-  },
-  {
-    title: "Focus",
-    copy:
-      "Pomodoro is not a separate app. It is an island state with a calm timer, next action, and AI handoff at the end.",
-    icon: <Clock3 className="size-5" />,
-    tone: "violet",
-    lines: ["deep work", "12:45", "log progress"],
-  },
-  {
-    title: "NetEase",
-    copy:
-      "Music is part of the stack with search, playback, and account connection instead of a detached utility page.",
-    icon: <Music4 className="size-5" />,
-    tone: "emerald",
-    lines: ["search", "results", "wave"],
   },
   {
     title: "Files",
     copy:
-      "Recent artifacts stay resumable. The island can reopen the right file workflow without dropping the user into a dashboard maze.",
+      "Recent artifacts are resumable. The stack reopens the right file workflow instead of dropping you into a dashboard maze.",
     icon: <FolderOpen className="size-5" />,
-    tone: "amber",
-    lines: ["resume", "open", "share"],
+  },
+  {
+    title: "NetEase",
+    copy:
+      "Search, playback, and account connection live inside the same stack as the rest of the island capabilities.",
+    icon: <Music4 className="size-5" />,
+  },
+  {
+    title: "Focus",
+    copy:
+      "Pomodoro is a calm island state with next actions and AI handoff, not a separate productivity mini-app.",
+    icon: <Clock3 className="size-5" />,
+  },
+  {
+    title: "File-first AI handoff",
+    copy:
+      "Generated reports, transcripts, and captures materialize as files first, then continue through AI with explicit user intent.",
+    icon: <FileStack className="size-5" />,
+  },
+  {
+    title: "Self-hosted stack",
+    copy:
+      "The public site, dashboard, native island, and optional local infra all ship in one reproducible repo.",
+    icon: <Server className="size-5" />,
+  },
+  {
+    title: "BYOK providers",
+    copy:
+      "No project account is required. Use your own models, gateways, storage, and speech or video services.",
+    icon: <ShieldCheck className="size-5" />,
   },
 ];
 
-const repoModules = [
+const problemRows = [
   {
-    title: "Native island runtime",
-    detail:
-      "Rust-native Windows shell with surface rendering, capture flows, resumable actions, and local file handoff.",
+    without:
+      "You keep bouncing between recorder windows, dashboards, and tool pages just to finish one small task.",
+    with:
+      "Ark keeps the flow on the island so the next useful action is always one surface away.",
   },
   {
-    title: "Operator dashboard",
-    detail:
-      "Next.js app for agent chat, tools, jobs, connections, open-source docs, and public landing pages.",
+    without:
+      "Audio, screenshots, and edits turn into dead files that still need manual cleanup, naming, and follow-up.",
+    with:
+      "Captures and edits flow directly into files, transcripts, markdown reports, and AI handoff.",
   },
   {
-    title: "Self-hosted services",
-    detail:
-      "Optional PostgreSQL, Redis, MinIO, and executor services for local-first runs, files, and artifacts.",
+    without:
+      "Your desktop assistant looks polished, but the real work still happens somewhere else.",
+    with:
+      "The island itself becomes the execution surface for recording, editing, playback, focus, and file resumption.",
+  },
+  {
+    without:
+      "Open-source release work turns into an internal cleanup project because docs, envs, and links are not public-safe.",
+    with:
+      "Ark ships with BYOK env examples, GitHub community files, self-hosting docs, and a public landing page out of the box.",
   },
 ];
 
-const providerGroups = [
+const specialRows = [
   {
-    label: "Chat and images",
-    value: "OpenAI or your own compatible gateway",
+    label: "Surface-native orchestration",
+    copy:
+      "Ark models the island as the product surface, not as a notification shell attached to a dashboard later.",
   },
   {
-    label: "Video reasoning",
-    value: "Gemini or Google API",
+    label: "File-first state transitions",
+    copy:
+      "Reports, transcripts, captures, and edits become explicit artifacts that can be reopened, downloaded, or sent back into AI.",
   },
   {
-    label: "Speech to text",
-    value: "Volcengine ASR",
+    label: "Resumable local state",
+    copy:
+      "The stack can reopen music, files, studio, focus, and recent results with the right priority instead of guessing from stale state.",
   },
   {
-    label: "Infra",
-    value: "Compose for Postgres, Redis, MinIO, executor",
+    label: "Provider portability",
+    copy:
+      "OpenAI-compatible chat, Gemini video analysis, Volcengine ASR, and local infra stay configurable without changing the public contract.",
+  },
+  {
+    label: "Native + web in one repo",
+    copy:
+      "Rust island runtime, Next.js dashboard, self-hosting docs, and optional infra are versioned together as one product.",
+  },
+  {
+    label: "Public-safe release posture",
+    copy:
+      "The repo is meant to be pushed as-is: license, templates, CI, docs, source links, and no bundled project secrets.",
+  },
+];
+
+const boundaryRows = [
+  {
+    title: "Not a generic widget gallery.",
+    copy:
+      "The goal is not to showcase mini-components. The goal is to make the island itself the place where workflows continue.",
+  },
+  {
+    title: "Not a hosted-only SaaS shell.",
+    copy:
+      "Ark is designed to be forked, self-hosted, and BYOK. Public copy cannot rely on our private infra to make sense.",
+  },
+  {
+    title: "Not dashboard-first.",
+    copy:
+      "The dashboard exists, but the product story starts from the island and radiates outward into files, tools, and docs.",
+  },
+  {
+    title: "Not a single narrow tool.",
+    copy:
+      "Capture, editing, playback, files, focus, and AI handoff all belong to the same surface system.",
   },
 ];
 
@@ -154,316 +233,284 @@ const quickstart = [
   "cargo run --manifest-path desktop/Cargo.toml -p omniagent-island",
 ];
 
+const faqs = [
+  {
+    question: "What does a typical Ark setup look like?",
+    answer:
+      "The public site and dashboard run from Next.js, the island runtime runs locally on Windows, and optional Compose services add durable state and artifacts.",
+  },
+  {
+    question: "Do I need Ark-hosted accounts or project keys?",
+    answer:
+      "No. The repo is BYOK. You bring your own model, speech, video, or storage providers and keep secrets in your own environment.",
+  },
+  {
+    question: "Can I use just the website or just the island?",
+    answer:
+      "Yes. The architecture is modular. You can run the website alone, the website plus local infra, or the full site-plus-native-island stack.",
+  },
+  {
+    question: "Why not just open a dashboard or a recorder app?",
+    answer:
+      "Because Ark is optimized around fewer jumps. The point is to keep capture, AI, files, and resume actions on the smallest useful surface.",
+  },
+];
+
 function SectionEyebrow({ children }: { children: ReactNode }) {
   return (
-    <p className="text-xs uppercase tracking-[0.28em] text-slate-500">
+    <p className="text-[11px] uppercase tracking-[0.28em] text-neutral-500">
       {children}
     </p>
   );
 }
 
-function HeroIsland({
-  tag,
+function SurfaceCard({
+  label,
   title,
-  subtitle,
+  detail,
+  chip,
   accent,
-  badge,
-  meta,
 }: {
-  tag: string;
+  label: string;
   title: string;
-  subtitle: string;
+  detail: string;
+  chip: string;
   accent: string;
-  badge: string;
-  meta: string;
 }) {
   return (
-    <article className="relative overflow-hidden rounded-[2.2rem] border border-white/10 bg-[#050810] p-5 text-white shadow-[0_22px_70px_rgba(2,6,23,0.38)]">
-      <div className={`absolute inset-x-0 top-0 h-24 bg-gradient-to-b ${accent}`} />
-      <div className="relative flex items-start justify-between gap-6">
-        <div>
-          <p className="text-[11px] uppercase tracking-[0.24em] text-slate-400">
-            {tag}
-          </p>
-          <h3 className="mt-4 text-xl font-semibold tracking-[-0.03em]">
-            {title}
-          </h3>
-          <p className="mt-2 max-w-xs text-sm leading-7 text-slate-300">
-            {subtitle}
-          </p>
-        </div>
-        <div className="rounded-full border border-white/10 bg-white/8 px-3 py-1 text-xs text-slate-200">
-          {badge}
-        </div>
-      </div>
-      <div className="relative mt-8 rounded-[1.6rem] border border-white/8 bg-white/[0.04] p-4">
-        <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.22em] text-slate-400">
-          <span>Island surface</span>
-          <span>{meta}</span>
-        </div>
-        <div className="mt-4 rounded-[1.5rem] bg-black/75 px-4 py-3">
-          <div className="flex items-center justify-between gap-4">
+    <article className="rounded-[2rem] border border-black/8 bg-[#0b0b0d] p-4 text-white shadow-[0_30px_90px_rgba(15,23,42,0.12)]">
+      <div className="rounded-[1.5rem] border border-white/8 bg-black px-4 py-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className={`size-2.5 rounded-full ${accent}`} />
             <div>
-              <div className="text-sm font-medium">{tag}</div>
-              <div className="mt-1 text-xs text-slate-400">{subtitle}</div>
-            </div>
-            <div className="rounded-full bg-white/10 px-3 py-1 text-xs">
-              {badge}
+              <div className="text-sm font-medium">{label}</div>
+              <div className="text-[11px] uppercase tracking-[0.24em] text-white/38">
+                island surface
+              </div>
             </div>
           </div>
-          <div className="mt-4 h-1.5 rounded-full bg-white/8">
-            <div className="h-full w-2/3 rounded-full bg-white/70" />
+          <div className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-xs text-white/80">
+            {chip}
           </div>
+        </div>
+        <div className="mt-5">
+          <div className="text-lg font-semibold tracking-[-0.03em]">{title}</div>
+          <div className="mt-2 text-sm leading-7 text-white/62">{detail}</div>
+        </div>
+        <div className="mt-5 h-1.5 rounded-full bg-white/8">
+          <div className="h-full w-2/3 rounded-full bg-white/80" />
         </div>
       </div>
     </article>
   );
 }
 
-function CapabilityMock({
+function FeatureCard({
   title,
+  copy,
   icon,
-  tone,
-  lines,
 }: {
   title: string;
+  copy: string;
   icon: ReactNode;
-  tone: CapabilityTone;
-  lines: string[];
 }) {
-  const toneMap = {
-    cyan: "bg-cyan-300 text-slate-950",
-    orange: "bg-orange-300 text-slate-950",
-    pink: "bg-pink-300 text-slate-950",
-    violet: "bg-violet-300 text-slate-950",
-    emerald: "bg-emerald-300 text-slate-950",
-    amber: "bg-amber-300 text-slate-950",
-  } as const;
-
   return (
-    <div className="rounded-[1.9rem] border border-slate-200 bg-[#0b1018] p-4 text-white shadow-[0_18px_50px_rgba(15,23,42,0.14)]">
-      <div className="rounded-[1.4rem] bg-black px-4 py-3">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div
-              className={`flex size-9 items-center justify-center rounded-full ${toneMap[tone]}`}
-            >
-              {icon}
-            </div>
-            <div>
-              <div className="text-sm font-medium">{title}</div>
-              <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">
-                island surface
-              </div>
+    <article className="rounded-[1.8rem] border border-black/8 bg-white p-5">
+      <div className="inline-flex size-10 items-center justify-center rounded-2xl border border-black/8 bg-[#f7f3ea]">
+        {icon}
+      </div>
+      <h3 className="mt-5 text-xl font-semibold tracking-[-0.03em] text-neutral-950">
+        {title}
+      </h3>
+      <p className="mt-3 text-sm leading-7 text-neutral-600">{copy}</p>
+    </article>
+  );
+}
+
+function ComparisonTable({
+  title,
+  rows,
+  leftLabel,
+  rightLabel,
+}: {
+  title: string;
+  rows: Array<{ without: string; with: string }>;
+  leftLabel: string;
+  rightLabel: string;
+}) {
+  return (
+    <section className="mx-auto max-w-6xl px-6 py-20 lg:px-10">
+      <SectionEyebrow>{title}</SectionEyebrow>
+      <div className="mt-6 overflow-hidden rounded-[2rem] border border-black/8 bg-white">
+        <div className="grid border-b border-black/8 bg-[#f7f3ea] text-xs uppercase tracking-[0.22em] text-neutral-500 md:grid-cols-[1fr_1fr]">
+          <div className="px-5 py-4">{leftLabel}</div>
+          <div className="border-t border-black/8 px-5 py-4 md:border-l md:border-t-0">
+            {rightLabel}
+          </div>
+        </div>
+        {rows.map((row) => (
+          <div
+            key={`${row.without}-${row.with}`}
+            className="grid text-sm leading-7 md:grid-cols-[1fr_1fr]"
+          >
+            <div className="px-5 py-5 text-neutral-600">{row.without}</div>
+            <div className="border-t border-black/8 px-5 py-5 text-neutral-950 md:border-l md:border-t-0">
+              {row.with}
             </div>
           </div>
-          <div className="h-2.5 w-2.5 rounded-full bg-white/50" />
-        </div>
-        <div className="mt-4 grid gap-2 text-xs text-slate-300">
-          {lines.map((line, index) => (
-            <div
-              key={line}
-              className={`rounded-full px-3 py-2 ${
-                index === lines.length - 1
-                  ? "bg-white/12 text-white"
-                  : "bg-white/6"
-              }`}
-            >
-              {line}
-            </div>
-          ))}
-        </div>
+        ))}
       </div>
-    </div>
+    </section>
   );
 }
 
 export default function Home() {
   return (
-    <main className="min-h-screen overflow-hidden bg-[linear-gradient(180deg,_#061018_0%,_#0a1620_24%,_#f4f1e8_24%,_#f4f1e8_100%)] text-slate-950">
-      <section className="relative isolate overflow-hidden border-b border-white/10 bg-[#061018] text-slate-50">
-        <div className="absolute left-[-10rem] top-[-8rem] h-72 w-72 rounded-full bg-cyan-400/15 blur-3xl" />
-        <div className="absolute right-[-8rem] top-12 h-64 w-64 rounded-full bg-orange-400/12 blur-3xl" />
-        <div className="mx-auto max-w-7xl px-6 pb-24 pt-8 lg:px-10">
-          <header className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex size-12 items-center justify-center rounded-2xl border border-white/12 bg-white/6">
-                <Sparkles className="size-5 text-cyan-200" />
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-[0.32em] text-cyan-100/65">
-                  Open-source Dynamic Island
-                </p>
-                <h1 className="text-lg font-semibold">{appConfig.name}</h1>
-              </div>
-            </div>
-            <nav className="flex flex-wrap items-center gap-3 text-sm text-slate-300">
-              <Link href="#showcase" className="transition hover:text-white">
-                Showcase
-              </Link>
-              <Link href="#quickstart" className="transition hover:text-white">
-                Quickstart
-              </Link>
-              <Link href="/open-source" className="transition hover:text-white">
-                Docs
-              </Link>
-              <Link
-                href={appConfig.links.source}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/6 px-4 py-2 text-white transition hover:bg-white/10"
-              >
-                <Github className="size-4" />
-                GitHub
-              </Link>
-            </nav>
-          </header>
+    <main className="min-h-screen bg-[#f6f2e8] text-neutral-950">
+      <div className="h-3 bg-[linear-gradient(90deg,#6ed7ff_0%,#c6f36d_28%,#ffb867_58%,#ff84d4_100%)]" />
 
-          <div className="mt-18 grid gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
-            <div className="max-w-3xl">
-              <p className="inline-flex rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2 text-xs uppercase tracking-[0.26em] text-cyan-100/80">
-                Product-first, self-hosted, forkable
-              </p>
-              <h2 className="mt-6 text-5xl font-semibold tracking-[-0.06em] text-balance sm:text-6xl">
-                The Dynamic Island is not a widget. It is the workflow.
-              </h2>
-              <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">
-                Ark turns the island into an execution surface for
-                capture, editing, files, music, focus, and AI handoff. The full
-                stack is open-source, self-hosted, and designed around the
-                native island itself, not bolted onto a dashboard later.
-              </p>
-              <div className="mt-9 flex flex-wrap gap-3">
-                <Link
-                  href="/dashboard"
-                  className="inline-flex items-center gap-2 rounded-full bg-cyan-300 px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-cyan-200"
-                >
-                  Open dashboard
-                  <ArrowRight className="size-4" />
-                </Link>
-                <Link
-                  href="/open-source"
-                  className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/6 px-5 py-3 text-sm font-medium text-white transition hover:bg-white/10"
-                >
-                  Read self-hosting guide
-                </Link>
-              </div>
-              <div className="mt-10 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-                  <div className="text-2xl font-semibold tracking-[-0.04em]">
-                    6
-                  </div>
-                  <div className="mt-1 text-sm text-slate-300">
-                    flagship island surfaces
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-                  <div className="text-2xl font-semibold tracking-[-0.04em]">
-                    BYOK
-                  </div>
-                  <div className="mt-1 text-sm text-slate-300">
-                    no bundled provider secrets
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-                  <div className="text-2xl font-semibold tracking-[-0.04em]">
-                    Local
-                  </div>
-                  <div className="mt-1 text-sm text-slate-300">
-                    infra and artifact storage
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="relative">
-              <div className="absolute inset-x-8 top-12 h-64 rounded-full bg-cyan-300/10 blur-3xl" />
-              <div className="relative grid gap-5">
-                {showcaseCards.map((card, index) => (
-                  <div
-                    key={card.tag}
-                    className={
-                      index === 1
-                        ? "lg:translate-x-10"
-                        : index === 2
-                          ? "lg:-translate-x-6"
-                          : ""
-                    }
-                  >
-                    <HeroIsland {...card} />
-                  </div>
-                ))}
-              </div>
+      <header className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-6 lg:px-10">
+        <div className="flex items-center gap-3">
+          <div className="flex size-11 items-center justify-center rounded-2xl border border-black/8 bg-white">
+            <Sparkles className="size-5" />
+          </div>
+          <div>
+            <div className="text-sm font-semibold">{appConfig.name}</div>
+            <div className="text-[11px] uppercase tracking-[0.22em] text-neutral-500">
+              Open-source Dynamic Island
             </div>
           </div>
         </div>
-      </section>
 
-      <section id="showcase" className="mx-auto max-w-7xl px-6 py-24 lg:px-10">
-        <div className="max-w-3xl">
-          <SectionEyebrow>Island showcase</SectionEyebrow>
-          <h3 className="mt-4 text-4xl font-semibold tracking-[-0.05em] text-slate-950 sm:text-5xl">
-            Every major workflow is designed as an island-native state.
-          </h3>
-          <p className="mt-5 text-base leading-8 text-slate-600">
-            The point is not to mirror a full app in miniature. The point is to
-            let the next useful action happen from the smallest possible
-            surface.
+        <nav className="hidden items-center gap-5 text-sm text-neutral-600 md:flex">
+          <Link href="#features" className="transition hover:text-black">
+            Features
+          </Link>
+          <Link href="#quickstart" className="transition hover:text-black">
+            Quickstart
+          </Link>
+          <Link href="/open-source" className="transition hover:text-black">
+            Docs
+          </Link>
+          <Link
+            href={appConfig.links.source}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-4 py-2 text-black transition hover:bg-black hover:text-white"
+          >
+            <Github className="size-4" />
+            GitHub
+          </Link>
+        </nav>
+      </header>
+
+      <section className="mx-auto max-w-6xl px-6 pb-18 pt-6 lg:px-10 lg:pb-24 lg:pt-10">
+        <div className="max-w-4xl">
+          <div className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-4 py-2 text-[11px] uppercase tracking-[0.26em] text-neutral-600">
+            <Command className="size-3.5" />
+            Open-source orchestration for island-native workflows
+          </div>
+          <h1 className="mt-7 max-w-5xl text-5xl font-semibold tracking-[-0.07em] text-neutral-950 sm:text-6xl lg:text-7xl">
+            Manage workflows, not windows.
+          </h1>
+          <p className="mt-6 text-2xl font-medium tracking-[-0.04em] text-neutral-700">
+            If a dashboard is a workspace, Ark is the surface.
           </p>
+          <p className="mt-6 max-w-3xl text-lg leading-8 text-neutral-600">
+            Ark is a public, self-hosted stack that turns the Dynamic Island into
+            a real execution surface for capture, files, editing, music, focus,
+            and AI handoff. The site, dashboard, native runtime, and optional
+            local infra all ship in one repo.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link
+              href="#quickstart"
+              className="inline-flex items-center gap-2 rounded-full bg-black px-5 py-3 text-sm font-medium text-white transition hover:bg-neutral-800"
+            >
+              Quickstart
+              <ArrowRight className="size-4" />
+            </Link>
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-5 py-3 text-sm font-medium text-neutral-950 transition hover:border-black"
+            >
+              Open dashboard
+            </Link>
+            <Link
+              href={appConfig.links.source}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-full border border-black/10 px-5 py-3 text-sm font-medium text-neutral-700 transition hover:bg-white"
+            >
+              View source
+              <ArrowUpRight className="size-4" />
+            </Link>
+          </div>
         </div>
 
-        <div className="mt-12 grid gap-6 lg:grid-cols-2">
-          {featureScenes.map((scene) => (
-            <article
-              key={scene.title}
-              className="grid gap-5 rounded-[2.2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_70px_rgba(15,23,42,0.08)] lg:grid-cols-[1.1fr_0.9fr]"
+        <div className="mt-12 flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.22em] text-neutral-500">
+          <span>Works with</span>
+          {worksWith.map((item) => (
+            <span
+              key={item}
+              className="rounded-full border border-black/10 bg-white px-3 py-2"
             >
-              <div>
-                <div className="inline-flex rounded-full border border-slate-200 px-3 py-1 text-xs uppercase tracking-[0.24em] text-slate-500">
-                  {scene.title}
-                </div>
-                <p className="mt-5 text-lg leading-8 text-slate-700">
-                  {scene.copy}
-                </p>
-              </div>
-              <CapabilityMock
-                title={scene.title}
-                icon={scene.icon}
-                tone={scene.tone}
-                lines={scene.lines}
-              />
-            </article>
+              {item}
+            </span>
           ))}
         </div>
+
+        <div className="mt-12 grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+          <div className="overflow-hidden rounded-[2rem] border border-black/8 bg-[#0c0d10] text-white shadow-[0_30px_90px_rgba(15,23,42,0.08)]">
+            <div className="flex items-center justify-between border-b border-white/8 px-5 py-4 text-xs uppercase tracking-[0.24em] text-white/44">
+              <span>Quickstart</span>
+              <span>Public + self-hosted</span>
+            </div>
+            <div className="space-y-3 px-5 py-5 font-mono text-[13px] leading-7">
+              {quickstart.map((line) => (
+                <div key={line} className="rounded-2xl bg-white/6 px-4 py-3">
+                  {line}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid gap-4">
+            {heroSurfaces.map((surface) => (
+              <SurfaceCard key={surface.label} {...surface} />
+            ))}
+          </div>
+        </div>
       </section>
 
-      <section className="border-y border-[#d5d7d1] bg-[#ebe7db]">
-        <div className="mx-auto grid max-w-7xl gap-10 px-6 py-22 lg:grid-cols-[0.95fr_1.05fr] lg:px-10">
-          <div>
-            <SectionEyebrow>What ships</SectionEyebrow>
-            <h3 className="mt-4 text-4xl font-semibold tracking-[-0.05em] text-slate-950">
-              The repo is opinionated, but not closed.
-            </h3>
-            <p className="mt-5 max-w-xl text-base leading-8 text-slate-600">
-              You get the island, the dashboard, the public website, and the
-              local service wiring in one place. Swap providers, keep the shell,
-              and publish your own fork without scrubbing private baggage.
-            </p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-3">
-            {repoModules.map((module) => (
+      <section className="border-y border-black/8 bg-white">
+        <div className="mx-auto max-w-6xl px-6 py-20 lg:px-10">
+          <SectionEyebrow>What is Ark?</SectionEyebrow>
+          <h2 className="mt-4 max-w-4xl text-4xl font-semibold tracking-[-0.06em] sm:text-5xl">
+            Ark is the control surface for dynamic-island-first productivity.
+          </h2>
+          <p className="mt-5 max-w-3xl text-base leading-8 text-neutral-600">
+            It looks like a minimal desktop island, but under the hood it
+            carries native capture, resumable files, self-hosted web control,
+            tool routing, and AI handoff. The point is not decoration. The point
+            is to let work continue from the smallest useful surface.
+          </p>
+
+          <div className="mt-10 grid gap-4 md:grid-cols-3">
+            {orchestrationSteps.map((item) => (
               <article
-                key={module.title}
-                className="rounded-[1.9rem] border border-[#d6d1c6] bg-white p-5"
+                key={item.step}
+                className="rounded-[1.8rem] border border-black/8 bg-[#f7f3ea] p-5"
               >
-                <div className="inline-flex size-10 items-center justify-center rounded-2xl bg-slate-950 text-white">
-                  <Sparkles className="size-4" />
+                <div className="text-xs uppercase tracking-[0.24em] text-neutral-500">
+                  {item.step}
                 </div>
-                <h4 className="mt-5 text-xl font-semibold tracking-[-0.03em]">
-                  {module.title}
-                </h4>
-                <p className="mt-3 text-sm leading-7 text-slate-600">
-                  {module.detail}
+                <h3 className="mt-4 text-xl font-semibold tracking-[-0.03em]">
+                  {item.title}
+                </h3>
+                <p className="mt-3 text-sm leading-7 text-neutral-600">
+                  {item.copy}
                 </p>
               </article>
             ))}
@@ -471,43 +518,148 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="quickstart" className="mx-auto max-w-7xl px-6 py-24 lg:px-10">
-        <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
+      <section className="mx-auto max-w-6xl px-6 py-20 lg:px-10">
+        <SectionEyebrow>Ark is right for you if</SectionEyebrow>
+        <div className="mt-6 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="grid gap-4">
+            {fitList.map((item) => (
+              <div
+                key={item}
+                className="flex gap-3 rounded-[1.6rem] border border-black/8 bg-white px-5 py-4"
+              >
+                <CheckCircle2 className="mt-1 size-5 shrink-0 text-emerald-600" />
+                <p className="text-sm leading-7 text-neutral-700">{item}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-[2rem] border border-black/8 bg-[#111214] p-6 text-white">
+            <div className="flex size-11 items-center justify-center rounded-2xl bg-white/8">
+              <Bot className="size-5" />
+            </div>
+            <h3 className="mt-6 text-2xl font-semibold tracking-[-0.03em]">
+              The island is the product.
+            </h3>
+            <p className="mt-4 text-sm leading-7 text-white/70">
+              Ark is not trying to make a dashboard prettier. It is trying to
+              reduce decision cost. The user should see what matters, act once,
+              and keep moving.
+            </p>
+            <div className="mt-6 rounded-[1.5rem] border border-white/10 bg-black px-4 py-4">
+              <div className="text-[11px] uppercase tracking-[0.22em] text-white/40">
+                Design thesis
+              </div>
+              <div className="mt-3 text-lg font-medium">
+                Smaller surface, lower friction, faster handoff.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="features" className="border-y border-black/8 bg-[#ece7dc]">
+        <div className="mx-auto max-w-6xl px-6 py-20 lg:px-10">
+          <SectionEyebrow>Features</SectionEyebrow>
+          <h2 className="mt-4 max-w-4xl text-4xl font-semibold tracking-[-0.06em] sm:text-5xl">
+            Island-native workflows, public-safe release posture, one repo.
+          </h2>
+          <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {featureCards.map((card) => (
+              <FeatureCard key={card.title} {...card} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <ComparisonTable
+        title="Problems Ark solves"
+        rows={problemRows}
+        leftLabel="Without Ark"
+        rightLabel="With Ark"
+      />
+
+      <section className="border-y border-black/8 bg-white">
+        <div className="mx-auto max-w-6xl px-6 py-20 lg:px-10">
+          <SectionEyebrow>Why Ark is special</SectionEyebrow>
+          <div className="mt-6 overflow-hidden rounded-[2rem] border border-black/8">
+            {specialRows.map((row, index) => (
+              <div
+                key={row.label}
+                className={`grid gap-4 bg-white px-5 py-5 md:grid-cols-[240px_1fr] ${
+                  index === 0 ? "" : "border-t border-black/8"
+                }`}
+              >
+                <div className="text-sm font-semibold text-neutral-950">
+                  {row.label}
+                </div>
+                <div className="text-sm leading-7 text-neutral-600">
+                  {row.copy}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-6 py-20 lg:px-10">
+        <SectionEyebrow>What Ark is not</SectionEyebrow>
+        <div className="mt-6 overflow-hidden rounded-[2rem] border border-black/8 bg-white">
+          {boundaryRows.map((row, index) => (
+            <div
+              key={row.title}
+              className={`grid gap-4 px-5 py-5 md:grid-cols-[240px_1fr] ${
+                index === 0 ? "" : "border-t border-black/8"
+              }`}
+            >
+              <div className="text-sm font-semibold text-neutral-950">
+                {row.title}
+              </div>
+              <div className="text-sm leading-7 text-neutral-600">
+                {row.copy}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section id="quickstart" className="border-y border-black/8 bg-white">
+        <div className="mx-auto grid max-w-6xl gap-10 px-6 py-20 lg:grid-cols-[0.95fr_1.05fr] lg:px-10">
           <div>
             <SectionEyebrow>Quickstart</SectionEyebrow>
-            <h3 className="mt-4 text-4xl font-semibold tracking-[-0.05em] text-slate-950">
-              Fork it, bring your own keys, and boot the whole stack.
-            </h3>
-            <p className="mt-5 text-base leading-8 text-slate-600">
-              No private relay is required. No internal project needs to be
-              cloned first. The setup is public-safe and the env file ships with
-              placeholders only.
+            <h2 className="mt-4 text-4xl font-semibold tracking-[-0.06em] sm:text-5xl">
+              Open source. Self-hosted. No Ark account required.
+            </h2>
+            <p className="mt-5 max-w-2xl text-base leading-8 text-neutral-600">
+              Clone the repo, add your own provider keys, start the web layer,
+              and run the native island on Windows. The public contract is BYOK
+              and the examples stay placeholder-only.
             </p>
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
-              {providerGroups.map((group) => (
-                <article
-                  key={group.label}
-                  className="rounded-[1.7rem] border border-slate-200 bg-white px-5 py-4"
-                >
-                  <p className="text-xs uppercase tracking-[0.24em] text-slate-500">
-                    {group.label}
-                  </p>
-                  <p className="mt-2 text-base font-medium text-slate-900">
-                    {group.value}
-                  </p>
-                </article>
-              ))}
+              <article className="rounded-[1.6rem] border border-black/8 bg-[#f7f3ea] p-5">
+                <div className="text-sm font-semibold">Web + dashboard</div>
+                <p className="mt-2 text-sm leading-7 text-neutral-600">
+                  Next.js public site, dashboard routes, API routes, and docs
+                  all run from the same app package.
+                </p>
+              </article>
+              <article className="rounded-[1.6rem] border border-black/8 bg-[#f7f3ea] p-5">
+                <div className="text-sm font-semibold">Native island</div>
+                <p className="mt-2 text-sm leading-7 text-neutral-600">
+                  Rust-native Windows runtime powers capture, files, music,
+                  focus, studio, and resumable stack behavior.
+                </p>
+              </article>
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-[2.3rem] border border-slate-200 bg-[#09131c] text-slate-100 shadow-[0_30px_120px_rgba(15,23,42,0.16)]">
-            <div className="flex items-center justify-between border-b border-white/8 px-5 py-4 text-xs uppercase tracking-[0.26em] text-slate-400">
+          <div className="overflow-hidden rounded-[2rem] border border-black/8 bg-[#0c0d10] text-white">
+            <div className="flex items-center justify-between border-b border-white/8 px-5 py-4 text-xs uppercase tracking-[0.22em] text-white/44">
               <span>Terminal</span>
               <span>7 commands</span>
             </div>
             <div className="space-y-3 px-5 py-5 font-mono text-[13px] leading-7">
               {quickstart.map((line) => (
-                <div key={line} className="rounded-2xl bg-white/5 px-4 py-3">
+                <div key={line} className="rounded-2xl bg-white/6 px-4 py-3">
                   {line}
                 </div>
               ))}
@@ -516,68 +668,87 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="bg-[#09131c] py-22 text-slate-50">
-        <div className="mx-auto grid max-w-7xl gap-8 px-6 lg:grid-cols-[1fr_1fr] lg:px-10">
-          <div>
-            <SectionEyebrow>
-              <span className="text-cyan-200/75">Open-source contract</span>
-            </SectionEyebrow>
-            <h3 className="mt-4 text-4xl font-semibold tracking-[-0.05em] text-white">
-              Publishable without the cleanup sprint.
-            </h3>
-            <p className="mt-5 max-w-2xl text-base leading-8 text-slate-300">
-              The repo ships with a license, contributing guide, security
-              policy, issue templates, CI, public docs, and a homepage that
-              shows the product before the dashboard. That is the standard for
-              this project now.
-            </p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <article className="rounded-[1.8rem] border border-white/10 bg-white/5 p-5">
-              <ShieldCheck className="size-5 text-cyan-200" />
-              <h4 className="mt-4 text-lg font-semibold">Public-safe envs</h4>
-              <p className="mt-2 text-sm leading-7 text-slate-300">
-                `app/.env.example` contains placeholders only. No real key, no
-                internal relay, no bundled secrets.
+      <section className="mx-auto max-w-6xl px-6 py-20 lg:px-10">
+        <SectionEyebrow>FAQ</SectionEyebrow>
+        <div className="mt-8 grid gap-4 md:grid-cols-2">
+          {faqs.map((item) => (
+            <article
+              key={item.question}
+              className="rounded-[1.8rem] border border-black/8 bg-white p-6"
+            >
+              <div className="text-lg font-semibold tracking-[-0.03em]">
+                {item.question}
+              </div>
+              <p className="mt-3 text-sm leading-7 text-neutral-600">
+                {item.answer}
               </p>
             </article>
-            <article className="rounded-[1.8rem] border border-white/10 bg-white/5 p-5">
-              <Server className="size-5 text-cyan-200" />
-              <h4 className="mt-4 text-lg font-semibold">Self-hosted infra</h4>
-              <p className="mt-2 text-sm leading-7 text-slate-300">
-                Docker Compose wiring for Postgres, Redis, MinIO, and executor
-                is included for local reproducibility.
-              </p>
-            </article>
-          </div>
+          ))}
         </div>
+      </section>
 
-        <div className="mx-auto mt-12 flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 lg:px-10">
-          <div>
-            <div className="text-2xl font-semibold tracking-[-0.04em]">
-              Ready to fork your own island?
+      <section className="bg-[#101114] py-20 text-white">
+        <div className="mx-auto max-w-6xl px-6 lg:px-10">
+          <div className="grid gap-8 lg:grid-cols-[1fr_auto] lg:items-end">
+            <div>
+              <SectionEyebrow>
+                <span className="text-white/45">Public release posture</span>
+              </SectionEyebrow>
+              <h2 className="mt-4 text-4xl font-semibold tracking-[-0.06em] sm:text-5xl">
+                Publishable without the cleanup sprint.
+              </h2>
+              <p className="mt-5 max-w-2xl text-base leading-8 text-white/68">
+                Ark ships with license, community files, CI, public-safe env
+                examples, self-hosting docs, and a homepage that leads with the
+                product. That is the baseline now.
+              </p>
             </div>
-            <div className="mt-2 text-sm text-slate-400">
-              Start from the docs, then move into the dashboard.
+
+            <div className="flex flex-wrap gap-3">
+              <Link
+                href={appConfig.links.source}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/6 px-5 py-3 text-sm font-medium text-white transition hover:bg-white/10"
+              >
+                <Github className="size-4" />
+                View GitHub
+              </Link>
+              <Link
+                href="/open-source"
+                className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950 transition hover:bg-neutral-200"
+              >
+                Open docs
+                <ArrowRight className="size-4" />
+              </Link>
             </div>
           </div>
-          <div className="flex flex-wrap gap-3">
-            <Link
-              href={appConfig.links.source}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/6 px-5 py-3 text-sm font-medium text-white transition hover:bg-white/10"
-            >
-              <Github className="size-4" />
-              View GitHub
-            </Link>
-            <Link
-              href="/open-source"
-              className="inline-flex items-center gap-2 rounded-full bg-cyan-300 px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-cyan-200"
-            >
-              Open docs
-              <ArrowRight className="size-4" />
-            </Link>
+
+          <div className="mt-10 grid gap-4 md:grid-cols-3">
+            <article className="rounded-[1.7rem] border border-white/10 bg-white/5 p-5">
+              <FileText className="size-5 text-white/78" />
+              <div className="mt-4 text-lg font-semibold">Placeholder-only envs</div>
+              <p className="mt-2 text-sm leading-7 text-white/62">
+                Public examples stay secret-free. Bring your own providers and
+                keep sensitive values in your own environment.
+              </p>
+            </article>
+            <article className="rounded-[1.7rem] border border-white/10 bg-white/5 p-5">
+              <Server className="size-5 text-white/78" />
+              <div className="mt-4 text-lg font-semibold">Self-hosted infra</div>
+              <p className="mt-2 text-sm leading-7 text-white/62">
+                PostgreSQL, Redis, MinIO, and executor wiring are documented and
+                optional, not hidden prerequisites.
+              </p>
+            </article>
+            <article className="rounded-[1.7rem] border border-white/10 bg-white/5 p-5">
+              <Github className="size-5 text-white/78" />
+              <div className="mt-4 text-lg font-semibold">GitHub-ready shell</div>
+              <p className="mt-2 text-sm leading-7 text-white/62">
+                README, license, templates, CI, docs, and public site are ready
+                to push without a private cleanup pass.
+              </p>
+            </article>
           </div>
         </div>
       </section>
