@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <strong>The Dynamic Island, made useful.</strong>
+  <strong>Open-source orchestration for island-native workflows.</strong>
 </p>
 
 <p align="center">
@@ -30,7 +30,7 @@
 </p>
 
 <p align="center">
-  <sub>Open-source island-native orchestration. Public, self-hosted, and built around the island itself.</sub>
+  <sub>Turn the Dynamic Island into a real workflow surface for capture, files, Studio edits, playback, focus, and AI handoff.</sub>
 </p>
 
 <br/>
@@ -61,7 +61,7 @@ If you are deploying Ark through a coding agent, this is the product story it sh
 
 ## What is Ark?
 
-# The Dynamic Island, made useful.
+# Open-source orchestration for island-native workflows.
 
 **If a dashboard is a _workspace_, Ark is the _surface_.**
 
