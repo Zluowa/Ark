@@ -9,6 +9,8 @@
 <p align="center">
   <a href="#quickstart"><strong>Quickstart</strong></a>
   &middot;
+  <a href="#watch-the-full-island-tour"><strong>Full Tour</strong></a>
+  &middot;
   <a href="docs/SELF_HOSTING.md"><strong>Docs</strong></a>
   &middot;
   <a href="https://github.com/Zluowa/Ark"><strong>GitHub</strong></a>
@@ -24,6 +26,22 @@
 <p align="center">
   <sub>Public, self-hosted, and built around the island itself.</sub>
 </p>
+
+<br/>
+
+## Watch the full island tour
+
+<p align="center">
+  <a href="app/public/demo/full-island-tour.mp4">
+    <img src="app/public/demo/full-island-tour.gif" alt="Ark full island tour" />
+  </a>
+</p>
+
+<p align="center">
+  <sub>Audio Notes -> Studio -> NetEase -> Focus. Real native proof media from this repo, not mockups.</sub>
+</p>
+
+If you are deploying Ark through a coding agent, this is the product story it should preserve: capture something, materialize a file or result, reopen the next action in place, then hand it back to AI or playback without detouring through another shell.
 
 <br/>
 
@@ -182,6 +200,11 @@ Typical BYOK providers:
 
 Detailed setup lives in [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md).  
 Agent-first deployment guidance lives in [docs/AGENT_DEPLOYMENT.md](docs/AGENT_DEPLOYMENT.md).
+
+Public desktop note:
+
+- The default public desktop build is `native island + web dashboard`
+- The launcher starts the island and hands the dashboard off to `http://127.0.0.1:3010/dashboard`
 
 <br/>
 

@@ -10,7 +10,9 @@ Ark has three layers:
    Public website, dashboard, API routes, and tool orchestration
 2. `desktop/island`
    Native Windows island shell
-3. `infra` plus `services/executor-fastapi`
+3. `desktop/launcher`
+   Public desktop launcher that starts the island and hands dashboard access to the browser
+4. `infra` plus `services/executor-fastapi`
    Optional persistence, artifact storage, and execution services
 
 ## Minimal Local Mode
@@ -90,6 +92,10 @@ The native island runtime currently targets Windows because it depends on Window
 media, capture, and shell APIs.
 
 You can still run the website and API stack on other platforms.
+
+The public default desktop build does not require a separate Tauri shell. Run the
+website plus the island runtime, or use the launcher to start the island and then
+open `http://127.0.0.1:3010/dashboard`.
 
 ## Publish Safely
 

@@ -60,3 +60,14 @@ An implementation agent should finish with:
 3. `cargo test --manifest-path desktop/Cargo.toml -p omniagent-island -j 1`
 4. `node scripts/check-task-delivery.mjs`
 5. `node scripts/check-task-delivery.mjs --require-ui`
+
+## Public Desktop Contract
+
+The default public desktop path is:
+
+1. web app on `http://127.0.0.1:3010`
+2. native island via `cargo run --manifest-path desktop/Cargo.toml -p omniagent-island`
+3. optional launcher via `cargo run --manifest-path desktop/Cargo.toml -p omniagent-launcher`
+
+The launcher starts the island and hands the dashboard off to the browser. The
+public default branch does not require a separate Tauri shell.

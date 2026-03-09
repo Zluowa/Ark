@@ -30,7 +30,7 @@ $desktopRoot = Join-Path $repoRoot "desktop"
 $islandExe = Join-Path $desktopRoot "target/debug/omniagent-island.exe"
 
 Write-Host "[restart] stopping previous island/launcher processes..."
-Stop-ProcessByName -Names @("omniagent-island", "island", "omniagent-launcher", "launcher", "omniagent-tauri", "tauri-app")
+Stop-ProcessByName -Names @("omniagent-island", "island", "omniagent-launcher", "launcher")
 Stop-PortListeners -Ports @(9800)
 if (-not $SkipFrontend) {
   Stop-PortListeners -Ports @(3010)

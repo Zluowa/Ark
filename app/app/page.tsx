@@ -76,6 +76,14 @@ const demoFlows = [
   },
 ];
 
+const fullTour = {
+  title: "Full island tour",
+  copy:
+    "One continuous pass through the public Ark surface: record audio, reopen transcript work in Ask AI, clean an image, connect NetEase, then finish a focus block without falling into another app shell.",
+  media: "/demo/full-island-tour.mp4",
+  caption: "Audio Notes -> Studio -> NetEase -> Focus",
+};
+
 const worksWith = [
   "OpenAI",
   "Gemini",
@@ -382,6 +390,63 @@ function DemoFlowCard({
   );
 }
 
+function FullTourCard({
+  title,
+  copy,
+  media,
+  caption,
+}: {
+  title: string;
+  copy: string;
+  media: string;
+  caption: string;
+}) {
+  return (
+    <article className="overflow-hidden rounded-[2rem] border border-black/8 bg-[#0b0c10] text-white shadow-[0_34px_90px_rgba(15,23,42,0.14)]">
+      <div className="border-b border-white/8 px-5 py-4">
+        <div className="flex items-center justify-between gap-4 text-[11px] uppercase tracking-[0.24em] text-white/40">
+          <span>Full island tour</span>
+          <span>Real proof media</span>
+        </div>
+      </div>
+      <div className="p-5">
+        <div className="overflow-hidden rounded-[1.7rem] border border-white/8 bg-black">
+          <video
+            autoPlay
+            loop
+            muted
+            playsInline
+            preload="metadata"
+            className="aspect-[16/10] w-full bg-black object-cover"
+            src={media}
+          />
+        </div>
+        <div className="mt-5 grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
+          <div>
+            <h3 className="text-2xl font-semibold tracking-[-0.04em]">{title}</h3>
+            <p className="mt-3 text-sm leading-7 text-white/68">{copy}</p>
+          </div>
+          <div className="rounded-[1.4rem] border border-white/10 bg-white/6 p-4">
+            <div className="text-[11px] uppercase tracking-[0.22em] text-white/40">
+              Chain
+            </div>
+            <div className="mt-3 text-sm leading-7 text-white/78">{caption}</div>
+            <Link
+              href={media}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-white"
+            >
+              Watch MP4
+              <ArrowUpRight className="size-4" />
+            </Link>
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 function FeatureCard({
   title,
   copy,
@@ -521,7 +586,7 @@ export default function Home() {
               href="#flows"
               className="inline-flex items-center gap-2 rounded-full border border-black/10 px-5 py-3 text-sm font-medium text-neutral-700 transition hover:bg-white"
             >
-              Watch flows
+              Watch full tour
             </Link>
             <Link
               href={appConfig.links.source}
@@ -547,11 +612,11 @@ export default function Home() {
           ))}
         </div>
 
-        <div className="mt-12 grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+        <div className="mt-12 grid gap-6 lg:grid-cols-[0.72fr_1.28fr]">
           <div className="overflow-hidden rounded-[2rem] border border-black/8 bg-[#0c0d10] text-white shadow-[0_30px_90px_rgba(15,23,42,0.08)]">
             <div className="flex items-center justify-between border-b border-white/8 px-5 py-4 text-xs uppercase tracking-[0.24em] text-white/44">
               <span>Quickstart</span>
-              <span>Public + self-hosted</span>
+              <span>Agent-friendly</span>
             </div>
             <div className="space-y-3 px-5 py-5 font-mono text-[13px] leading-7">
               {quickstart.map((line) => (
@@ -560,12 +625,32 @@ export default function Home() {
                 </div>
               ))}
             </div>
+            <div className="border-t border-white/8 px-5 py-5">
+              <div className="text-[11px] uppercase tracking-[0.22em] text-white/40">
+                Deploy with an agent
+              </div>
+              <p className="mt-3 text-sm leading-7 text-white/68">
+                Start from one onboarding command, bring only your own keys,
+                then validate the public site, dashboard, and island runtime in
+                one pass.
+              </p>
+              <Link
+                href="/open-source"
+                className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
+              >
+                Open deploy guide
+                <ArrowRight className="size-4" />
+              </Link>
+            </div>
           </div>
 
           <div className="grid gap-4">
-            {heroSurfaces.map((surface) => (
-              <SurfaceCard key={surface.label} {...surface} />
-            ))}
+            <FullTourCard {...fullTour} />
+            <div className="grid gap-4 md:grid-cols-3">
+              {heroSurfaces.map((surface) => (
+                <SurfaceCard key={surface.label} {...surface} />
+              ))}
+            </div>
           </div>
         </div>
       </section>

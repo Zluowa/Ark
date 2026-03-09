@@ -1,6 +1,6 @@
-// @input: Island + Tauri executable paths
-// @output: Spawns both processes, monitors health
-// @position: Process orchestrator — single entry point for desktop app
+// @input: Island executable path
+// @output: Spawns the island process and prints the dashboard handoff
+// @position: Process orchestrator - single entry point for the desktop open-source build
 
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -10,21 +10,14 @@ use std::time::Duration;
 async fn main() {
     let dev_mode = std::env::args().any(|a| a == "--dev");
 
-    println!("[launcher] starting OmniAgent desktop (dev={dev_mode})");
+    println!("[launcher] starting Ark desktop (dev={dev_mode})");
     ensure_island_binary();
 
     let island = spawn_island();
-    let tauri = spawn_tauri(dev_mode);
+    print_dashboard_hint();
 
-    // Monitor both processes
-    let (island_result, tauri_result) =
-        tokio::join!(monitor("island", island), monitor("tauri", tauri),);
-
-    if let Err(e) = island_result {
+    if let Err(e) = monitor("island", island).await {
         eprintln!("[launcher] island error: {e}");
-    }
-    if let Err(e) = tauri_result {
-        eprintln!("[launcher] tauri error: {e}");
     }
 }
 
@@ -60,20 +53,9 @@ fn spawn_island() -> std::process::Child {
         .expect("failed to start island process")
 }
 
-fn spawn_tauri(dev_mode: bool) -> std::process::Child {
-    let exe = if cfg!(debug_assertions) {
-        "./target/debug/omniagent-tauri.exe"
-    } else {
-        "./tauri-app.exe"
-    };
-    let mut cmd = Command::new(exe);
-    if dev_mode {
-        cmd.env("TAURI_DEV", "1");
-    }
-    cmd.stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .expect("failed to start tauri process")
+fn print_dashboard_hint() {
+    println!("[launcher] dashboard shell is web-first in the public build");
+    println!("[launcher] open http://127.0.0.1:3010/dashboard in your browser when the web app is running");
 }
 
 async fn monitor(name: &str, mut child: std::process::Child) -> std::io::Result<()> {

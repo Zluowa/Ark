@@ -9,6 +9,8 @@ const quickstart = [
   "open http://127.0.0.1:3010",
 ];
 
+const fullTourMedia = "/demo/full-island-tour.mp4";
+
 const demoFlows = [
   {
     title: "Audio Notes -> To Text -> Ask AI",
@@ -138,20 +140,6 @@ export default function OpenSourcePage() {
         </header>
 
         <section className="grid gap-8 lg:grid-cols-[1fr_1fr]">
-          <div className="overflow-hidden rounded-[2rem] border border-black/8 bg-[#0c0d10] text-white">
-            <div className="flex items-center justify-between border-b border-white/8 px-5 py-4 text-xs uppercase tracking-[0.22em] text-white/44">
-              <span>Quickstart</span>
-              <span>7 commands</span>
-            </div>
-            <div className="space-y-3 px-5 py-5 font-mono text-[13px] leading-7">
-              {quickstart.map((line) => (
-                <div key={line} className="rounded-2xl bg-white/6 px-4 py-3">
-                  {line}
-                </div>
-              ))}
-            </div>
-          </div>
-
           <div className="grid gap-4">
             <article className="rounded-[1.8rem] border border-black/8 bg-white p-6">
               <Github className="size-5" />
@@ -179,10 +167,68 @@ export default function OpenSourcePage() {
                 Placeholder-only env examples
               </h2>
               <p className="mt-3 text-sm leading-7 text-neutral-600">
-              The public contract is BYOK. Docs and examples explain which keys
-              you can bring without exposing private credentials.
-            </p>
-          </article>
+                The public contract is BYOK. Docs and examples explain which keys
+                you can bring without exposing private credentials.
+              </p>
+            </article>
+          </div>
+
+          <div className="overflow-hidden rounded-[2rem] border border-black/8 bg-[#0c0d10] text-white">
+            <div className="flex items-center justify-between border-b border-white/8 px-5 py-4 text-xs uppercase tracking-[0.22em] text-white/44">
+              <span>Quickstart</span>
+              <span>Agent-ready</span>
+            </div>
+            <div className="space-y-3 px-5 py-5 font-mono text-[13px] leading-7">
+              {quickstart.map((line) => (
+                <div key={line} className="rounded-2xl bg-white/6 px-4 py-3">
+                  {line}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="overflow-hidden rounded-[2rem] border border-black/8 bg-[#0f1014] text-white">
+          <div className="grid gap-0 lg:grid-cols-[1.08fr_0.92fr]">
+            <div className="border-b border-white/8 p-5 lg:border-b-0 lg:border-r">
+              <div className="overflow-hidden rounded-[1.7rem] border border-white/8 bg-black">
+                <video
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  preload="metadata"
+                  className="aspect-[16/10] w-full bg-black object-cover"
+                  src={fullTourMedia}
+                />
+              </div>
+            </div>
+            <div className="p-6">
+              <p className="text-[11px] uppercase tracking-[0.28em] text-white/42">
+                Full island tour
+              </p>
+              <h2 className="mt-4 text-3xl font-semibold tracking-[-0.05em]">
+                Show the whole product before asking people to deploy it.
+              </h2>
+              <p className="mt-4 text-sm leading-7 text-white/68">
+                The public site and GitHub should not ask people to imagine the
+                island. This full tour shows the actual chain: audio capture,
+                file-first AI handoff, Studio editing, NetEase auth, and Focus
+                completion in one continuous surface story.
+              </p>
+              <div className="mt-6 rounded-[1.5rem] border border-white/10 bg-white/6 px-4 py-4 text-sm leading-7 text-white/72">
+                Audio Notes -&gt; Studio -&gt; NetEase -&gt; Focus
+              </div>
+              <Link
+                href={fullTourMedia}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-6 inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950 transition hover:bg-neutral-200"
+              >
+                Watch MP4
+                <ArrowUpRight className="size-4" />
+              </Link>
+            </div>
           </div>
         </section>
 
