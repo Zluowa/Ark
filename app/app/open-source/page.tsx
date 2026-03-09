@@ -3,13 +3,10 @@ import { ArrowRight, ArrowUpRight, FileCode2, Github, Server } from "lucide-reac
 import { appConfig } from "@/lib/config/app-config";
 
 const quickstart = [
-  "git clone https://github.com/Zluowa/Ark.git",
-  "cd Ark",
-  "pnpm --dir app install",
-  "cp app/.env.example app/.env.local",
-  "docker compose -f infra/docker-compose.yml up -d",
+  "pnpm onboard --yes --profile full",
   "pnpm --dir app dev",
   "cargo run --manifest-path desktop/Cargo.toml -p omniagent-island",
+  "open http://127.0.0.1:3010",
 ];
 
 const envGroups = [
@@ -82,6 +79,10 @@ export default function OpenSourcePage() {
             native island, optional local infra, and BYOK providers. No private
             project dependency is required.
           </p>
+          <p className="mt-4 text-sm leading-7 text-neutral-500">
+            If you are deploying through a coding agent, point it at
+            `docs/AGENT_DEPLOYMENT.md` or just run `pnpm onboard --yes --profile full`.
+          </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
               href={appConfig.links.source}
@@ -144,10 +145,10 @@ export default function OpenSourcePage() {
                 Placeholder-only env examples
               </h2>
               <p className="mt-3 text-sm leading-7 text-neutral-600">
-                The public contract is BYOK. Docs and examples explain which keys
-                you can bring without exposing private credentials.
-              </p>
-            </article>
+              The public contract is BYOK. Docs and examples explain which keys
+              you can bring without exposing private credentials.
+            </p>
+          </article>
           </div>
         </section>
 
@@ -196,7 +197,7 @@ export default function OpenSourcePage() {
               Ready to fork your own island stack?
             </div>
             <div className="mt-2 text-sm text-white/62">
-              Start from the public docs, then move into the dashboard and native runtime.
+              Start from the onboarding command, then move into the dashboard and native runtime.
             </div>
           </div>
           <Link

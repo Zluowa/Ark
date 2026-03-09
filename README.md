@@ -111,6 +111,18 @@ Ark is a self-hosted stack that turns the Dynamic Island into a real execution s
 Open source. Self-hosted. No Ark account required.
 
 ```bash
+pnpm onboard --yes --profile full
+```
+
+If you want the checklist first:
+
+```bash
+pnpm onboard --dry-run --profile full
+```
+
+Manual path:
+
+```bash
 git clone https://github.com/Zluowa/Ark.git
 cd Ark
 pnpm --dir app install
@@ -128,6 +140,7 @@ Typical BYOK providers:
 4. Search: `TAVILY_API_KEY`
 
 Detailed setup lives in [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md).
+Agent-first deployment guidance lives in [docs/AGENT_DEPLOYMENT.md](docs/AGENT_DEPLOYMENT.md).
 
 <br/>
 
@@ -141,6 +154,9 @@ No. The repo is BYOK. You bring your own model, speech, video, or storage provid
 
 **Can I use just the website or just the island?**  
 Yes. The architecture is modular. You can run the website alone, the website plus local infra, or the full site-plus-native-island stack.
+
+**Is there a one-command onboarding path for agents?**  
+Yes. Run `pnpm onboard --yes --profile full` for the full local checklist and setup flow, or `pnpm onboard --dry-run --profile full` to preview it.
 
 **Why not just open a dashboard or a recorder app?**  
 Because Ark is optimized around fewer jumps. The point is to keep capture, AI, files, and resume actions on the smallest useful surface.

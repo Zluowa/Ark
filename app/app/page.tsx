@@ -224,13 +224,10 @@ const boundaryRows = [
 ];
 
 const quickstart = [
-  "git clone https://github.com/Zluowa/Ark.git",
-  "cd Ark",
-  "pnpm --dir app install",
-  "cp app/.env.example app/.env.local",
-  "docker compose -f infra/docker-compose.yml up -d",
+  "pnpm onboard --yes --profile full",
   "pnpm --dir app dev",
   "cargo run --manifest-path desktop/Cargo.toml -p omniagent-island",
+  "open http://127.0.0.1:3010",
 ];
 
 const faqs = [
@@ -422,6 +419,10 @@ export default function Home() {
             a real execution surface for capture, files, editing, music, focus,
             and AI handoff. The site, dashboard, native runtime, and optional
             local infra all ship in one repo.
+          </p>
+          <p className="mt-4 max-w-3xl text-sm leading-7 text-neutral-500">
+            The default onboarding path is now one command, so a coding agent can
+            bootstrap the public stack without reverse engineering local setup.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
@@ -630,9 +631,9 @@ export default function Home() {
               Open source. Self-hosted. No Ark account required.
             </h2>
             <p className="mt-5 max-w-2xl text-base leading-8 text-neutral-600">
-              Clone the repo, add your own provider keys, start the web layer,
-              and run the native island on Windows. The public contract is BYOK
-              and the examples stay placeholder-only.
+              Start from one onboarding command, then launch the web app and the
+              native island. The public contract is BYOK and the examples stay
+              placeholder-only.
             </p>
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
               <article className="rounded-[1.6rem] border border-black/8 bg-[#f7f3ea] p-5">

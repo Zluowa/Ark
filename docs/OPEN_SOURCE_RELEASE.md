@@ -17,6 +17,7 @@ Use this checklist before pushing Ark to a public GitHub repository.
 
 ## Runtime Review
 
+1. `pnpm onboard --dry-run --profile full`
 1. `pnpm --dir app typecheck`
 2. `pnpm --dir app build`
 3. `cargo test --manifest-path desktop/Cargo.toml -p omniagent-island -j 1`
@@ -32,3 +33,4 @@ Use this checklist before pushing Ark to a public GitHub repository.
 1. Review `app/.env.example`
 2. Keep placeholders only
 3. Document any new variables in `README.md` and `docs/SELF_HOSTING.md`
+4. Keep `docs/AGENT_DEPLOYMENT.md` aligned with the actual onboarding command

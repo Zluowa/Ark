@@ -17,9 +17,9 @@ Ark has three layers:
 
 This is the fastest public-safe path:
 
-1. Copy `app/.env.example` to `app/.env.local`
-2. Add an `OPENAI_API_KEY` or your own compatible gateway values
-3. Run `pnpm --dir app install`
+1. Run `pnpm onboard --dry-run --profile web` if you want the checklist first
+2. Run `pnpm onboard --yes --profile web`
+3. Add an `OPENAI_API_KEY` or your own compatible gateway values
 4. Run `pnpm --dir app dev`
 
 This gives you the website and dashboard without durable infra.
@@ -29,10 +29,12 @@ This gives you the website and dashboard without durable infra.
 To enable persistent runs and local artifacts:
 
 ```bash
-docker compose -f infra/docker-compose.yml up -d
+pnpm onboard --yes --profile full
 pnpm --dir app dev
 cargo run --manifest-path desktop/Cargo.toml -p omniagent-island
 ```
+
+If you want an agent-friendly step-by-step guide, use [docs/AGENT_DEPLOYMENT.md](AGENT_DEPLOYMENT.md).
 
 ## Provider Setup
 
