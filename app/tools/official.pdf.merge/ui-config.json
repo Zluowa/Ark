@@ -1,0 +1,26 @@
+﻿{
+  "layout": "VerticalStack",
+  "props": {
+    "gap": "md"
+  },
+  "children": [
+    {
+      "component": "FileDropzone",
+      "props": {
+        "accept": ".pdf",
+        "placeholder": "Drop input file",
+        "binding": "input.file"
+      }
+    },
+    {
+      "component": "DownloadButton",
+      "props": {
+        "binding": "result.outputFile"
+      },
+      "condition": {
+        "field": "state.status",
+        "eq": "completed"
+      }
+    }
+  ]
+}

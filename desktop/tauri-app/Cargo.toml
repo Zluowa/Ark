@@ -1,0 +1,16 @@
+[package]
+name = "omniagent-tauri"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+omniagent-shared = { path = "../shared" }
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tauri = { version = "2", features = ["devtools"] }
+tauri-plugin-shell = "2"
+ureq = { version = "2", features = ["json"] }
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }

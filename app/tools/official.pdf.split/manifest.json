@@ -1,0 +1,43 @@
+﻿{
+  "id": "official.pdf.split",
+  "name": "PDF Split",
+  "version": "0.1.0",
+  "author": "omniagent",
+  "description": "Split a PDF by page ranges.",
+  "io": {
+    "inputs": [
+      {
+        "name": "file",
+        "required": true,
+        "type": "file",
+        "accepts": [".pdf"]
+      },
+      {
+        "default": "1-3,4-",
+        "name": "ranges",
+        "type": "string",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "format": "zip",
+        "name": "result",
+        "type": "file"
+      }
+    ]
+  },
+  "runtime": {
+    "language": "python",
+    "dependencies": ["pypdf==4.3.1"],
+    "timeout": 90,
+    "memory": "512MB"
+  },
+  "tags": ["pdf", "split", "document"],
+  "stats": {
+    "created_at": "2026-02-25T00:00:00Z",
+    "usage_count": 0,
+    "success_rate": 0
+  },
+  "claude_skill_compatible": true
+}

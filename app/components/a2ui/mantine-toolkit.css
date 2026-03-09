@@ -1,0 +1,5 @@
+/* Mantine component styles scoped to the toolkit widget */
+/* Import as CSS layers to avoid Tailwind conflicts */
+@import "@mantine/core/styles/ColorPicker.layer.css";
+@import "@mantine/core/styles/ColorInput.layer.css";
+@import "@mantine/dates/styles.layer.css";

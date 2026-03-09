@@ -1,0 +1,26 @@
+{
+  "name": "ark",
+  "private": true,
+  "packageManager": "pnpm@10.30.2",
+  "scripts": {
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d --build",
+    "infra:down": "docker compose -f infra/docker-compose.yml down",
+    "infra:logs": "docker compose -f infra/docker-compose.yml logs -f --tail=200",
+    "dev": "pnpm --dir app dev",
+    "dev:app": "pnpm --dir app dev:app",
+    "dev:island:restart": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/restart-island-dev.ps1",
+    "dev:island:restart:only": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/restart-island-dev.ps1 -SkipFrontend",
+    "dev:stack": "pnpm --dir app dev:stack",
+    "smoke:chat-run": "pnpm --dir app smoke:chat-run",
+    "smoke:tools-all": "pnpm --dir app smoke:tools-all",
+    "smoke:tools-async": "pnpm --dir app smoke:tools-async",
+    "smoke:img2img-fileproof": "pnpm --dir app smoke:img2img-fileproof",
+    "smoke:dispatch": "pnpm --dir app smoke:dispatch",
+    "check:encoding": "node scripts/check-encoding.mjs",
+    "test:contract": "pnpm --dir app test:contract",
+    "check:gate": "pnpm --dir app check:gate",
+    "lint": "pnpm --dir app lint",
+    "typecheck": "pnpm --dir app typecheck",
+    "build": "pnpm --dir app build"
+  }
+}

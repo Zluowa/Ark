@@ -1,0 +1,43 @@
+﻿{
+  "id": "official.image.convert",
+  "name": "Image Convert",
+  "version": "0.1.0",
+  "author": "omniagent",
+  "description": "Convert image format between PNG, JPEG and WebP.",
+  "io": {
+    "inputs": [
+      {
+        "name": "file",
+        "required": true,
+        "type": "file",
+        "accepts": [".png", ".jpg", ".jpeg", ".webp"]
+      },
+      {
+        "default": "png",
+        "name": "target_format",
+        "type": "string",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "format": "image",
+        "name": "result",
+        "type": "file"
+      }
+    ]
+  },
+  "runtime": {
+    "language": "python",
+    "dependencies": ["pillow==11.1.0"],
+    "timeout": 45,
+    "memory": "256MB"
+  },
+  "tags": ["image", "convert", "media"],
+  "stats": {
+    "created_at": "2026-02-25T00:00:00Z",
+    "usage_count": 0,
+    "success_rate": 0
+  },
+  "claude_skill_compatible": true
+}

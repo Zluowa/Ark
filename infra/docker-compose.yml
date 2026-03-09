@@ -1,0 +1,73 @@
+name: omniagent-infra
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: omniagent-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: omniagent
+      POSTGRES_PASSWORD: omniagent
+      POSTGRES_DB: omniagent
+    ports:
+      - "35432:5432"
+    volumes:
+      - ../.data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U omniagent -d omniagent"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+
+  redis:
+    image: redis:7-alpine
+    container_name: omniagent-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "36379:6379"
+    volumes:
+      - ../.data/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+
+  minio:
+    image: minio/minio:RELEASE.2025-01-20T14-49-07Z
+    container_name: omniagent-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    ports:
+      - "39000:9000"
+      - "39001:9001"
+    volumes:
+      - ../.data/minio:/data
+
+  executor-fastapi:
+    build:
+      context: ../services/executor-fastapi
+      dockerfile: Dockerfile
+    container_name: omniagent-executor-fastapi
+    restart: unless-stopped
+    environment:
+      EXECUTOR_PORT: 8080
+      EXECUTOR_ARTIFACT_BASE_URL: http://127.0.0.1:39000/omniagent-dev
+      S3_ENDPOINT: http://minio:9000
+      S3_PUBLIC_ENDPOINT: http://127.0.0.1:39000
+      S3_BUCKET: omniagent-dev
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+      S3_REGION: us-east-1
+      S3_SIGNED_URL_TTL_SEC: 3600
+    ports:
+      - "38080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy

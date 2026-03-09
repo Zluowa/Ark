@@ -1,0 +1,21 @@
+﻿{
+  "tool": "official.image.convert",
+  "cases": [
+    {
+      "name": "basic_success",
+      "input": {
+        "sample": "basic"
+      },
+      "expected": {
+        "status": "success"
+      }
+    },
+    {
+      "name": "invalid_input",
+      "input": {},
+      "expected": {
+        "status": "failed"
+      }
+    }
+  ]
+}

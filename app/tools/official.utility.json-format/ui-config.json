@@ -1,0 +1,26 @@
+﻿{
+  "layout": "VerticalStack",
+  "props": {
+    "gap": "md"
+  },
+  "children": [
+    {
+      "component": "TextArea",
+      "props": {
+        "placeholder": "Paste JSON text",
+        "rows": 6,
+        "binding": "params.text"
+      }
+    },
+    {
+      "component": "DownloadButton",
+      "props": {
+        "binding": "result.outputFile"
+      },
+      "condition": {
+        "field": "state.status",
+        "eq": "completed"
+      }
+    }
+  ]
+}
