@@ -108,16 +108,16 @@ export default function OpenSourcePage() {
             Open source guide
           </p>
           <h1 className="mt-4 text-5xl font-semibold tracking-[-0.06em] sm:text-6xl">
-            Self-host the full island stack.
+            Ship the full island stack.
           </h1>
           <p className="mt-6 text-lg leading-8 text-neutral-600">
-            This is the public-safe quickstart for Ark: website, dashboard,
-            native island, optional local infra, and BYOK providers. No private
-            project dependency is required.
+            This is the public-safe deployment contract for Ark: website,
+            dashboard, native island, optional local infra, and BYOK providers.
+            No private project dependency is required.
           </p>
           <p className="mt-4 text-sm leading-7 text-neutral-500">
-            If you are deploying through a coding agent, point it at
-            `docs/AGENT_DEPLOYMENT.md` or just run `pnpm onboard --yes --profile full`.
+            Start with `pnpm onboard --yes --profile full`, or point a coding
+            agent at `docs/AGENT_DEPLOYMENT.md` and keep the same public setup path.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link

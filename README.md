@@ -7,9 +7,15 @@
 </p>
 
 <p align="center">
+  <strong>The Dynamic Island, made useful.</strong>
+</p>
+
+<p align="center">
   <a href="#quickstart"><strong>Quickstart</strong></a>
   &middot;
   <a href="#watch-the-full-island-tour"><strong>Full Tour</strong></a>
+  &middot;
+  <a href="#agent-deployment"><strong>Agent Deploy</strong></a>
   &middot;
   <a href="docs/SELF_HOSTING.md"><strong>Docs</strong></a>
   &middot;
@@ -24,8 +30,16 @@
 </p>
 
 <p align="center">
-  <sub>Public, self-hosted, and built around the island itself.</sub>
+  <sub>Open-source island-native orchestration. Public, self-hosted, and built around the island itself.</sub>
 </p>
+
+<br/>
+
+## Start here
+
+- Watch the full island tour first so the product shape is obvious before you deploy it
+- Use `pnpm onboard --yes --profile full` as the public setup contract
+- Bring your own providers and keep all secrets in your own environment
 
 <br/>
 
@@ -41,19 +55,26 @@
   <sub>Audio Notes -> Studio -> NetEase -> Focus. Real native proof media from this repo, not mockups.</sub>
 </p>
 
-If you are deploying Ark through a coding agent, this is the product story it should preserve: capture something, materialize a file or result, reopen the next action in place, then hand it back to AI or playback without detouring through another shell.
+If you are deploying Ark through a coding agent, this is the product story it should preserve: capture something, materialize a real artifact, reopen the next action in place, then hand it back to AI, files, or playback without detouring through another shell.
 
 <br/>
 
 ## What is Ark?
 
-# Open-source orchestration for island-native workflows
+# The Dynamic Island, made useful.
 
 **If a dashboard is a _workspace_, Ark is the _surface_.**
 
 Ark is a self-hosted stack that turns the Dynamic Island into a real execution surface for capture, files, editing, music, focus, and AI handoff. The repo combines a Rust-native Windows island runtime, a Next.js public site and dashboard, and optional local infra for state and artifacts.
 
 **Manage workflows, not windows.**
+
+Ark is right for you if:
+
+- you want the island to do real work, not just announce it
+- you want fewer jumps between recorder windows, dashboards, and file managers
+- you want a public repo you can fork, self-host, and extend with BYOK providers
+- you want one system that connects island, dashboard, files, and AI handoff
 
 |        | Step                  | Example                                                                 |
 | ------ | --------------------- | ----------------------------------------------------------------------- |
