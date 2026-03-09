@@ -9,6 +9,40 @@ const quickstart = [
   "open http://127.0.0.1:3010",
 ];
 
+const demoFlows = [
+  {
+    title: "Audio Notes -> To Text -> Ask AI",
+    copy:
+      "File-first audio capture that reopens transcript work through the normal AI input flow.",
+    media: "/demo/audio-notes-flow.mp4",
+  },
+  {
+    title: "Studio -> Remove watermark",
+    copy:
+      "Open the island edit surface, run the image action, and land back on the preview result.",
+    media: "/demo/studio-watermark-flow.mp4",
+  },
+  {
+    title: "NetEase -> auth -> playback",
+    copy:
+      "Account connection, results, and playback stay in the same stack as the rest of the island surfaces.",
+    media: "/demo/netease-flow.mp4",
+  },
+  {
+    title: "Focus -> log progress",
+    copy:
+      "Start a focus block, finish it, and hand the result back to AI without leaving the island rhythm.",
+    media: "/demo/focus-flow.mp4",
+  },
+];
+
+const agentDeploySteps = [
+  "Run pnpm onboard --dry-run --profile full to inspect the contract first.",
+  "Copy app/.env.example to app/.env.local and fill only your own keys.",
+  "Launch the web app, then the native island runtime, then verify the homepage, dashboard, and stack.",
+  "Run typecheck, build, cargo test, and UI evidence before publishing your fork.",
+];
+
 const envGroups = [
   {
     title: "Core models",
@@ -149,6 +183,68 @@ export default function OpenSourcePage() {
               you can bring without exposing private credentials.
             </p>
           </article>
+          </div>
+        </section>
+
+        <section className="rounded-[2rem] border border-black/8 bg-[#111214] p-8 text-white">
+          <div className="grid gap-10 lg:grid-cols-[0.85fr_1.15fr]">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.28em] text-white/44">
+                Agent deployment
+              </p>
+              <h2 className="mt-4 text-4xl font-semibold tracking-[-0.06em]">
+                Give the repo to an agent without hidden setup knowledge.
+              </h2>
+              <div className="mt-6 space-y-3">
+                {agentDeploySteps.map((step, index) => (
+                  <div
+                    key={step}
+                    className="rounded-[1.4rem] border border-white/10 bg-white/6 px-4 py-4"
+                  >
+                    <div className="text-[11px] uppercase tracking-[0.22em] text-white/38">
+                      Step {index + 1}
+                    </div>
+                    <div className="mt-2 text-sm leading-7 text-white/72">
+                      {step}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <Link
+                href="https://github.com/Zluowa/Ark/blob/main/docs/AGENT_DEPLOYMENT.md"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-6 inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-medium text-neutral-950 transition hover:bg-neutral-200"
+              >
+                Open agent deploy guide
+                <ArrowUpRight className="size-4" />
+              </Link>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              {demoFlows.map((flow) => (
+                <article
+                  key={flow.title}
+                  className="overflow-hidden rounded-[1.8rem] border border-white/10 bg-black/35"
+                >
+                  <video
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    preload="metadata"
+                    className="aspect-[16/10] w-full border-b border-white/10 bg-black object-cover"
+                    src={flow.media}
+                  />
+                  <div className="p-4">
+                    <div className="text-sm font-semibold">{flow.title}</div>
+                    <p className="mt-2 text-sm leading-6 text-white/62">
+                      {flow.copy}
+                    </p>
+                  </div>
+                </article>
+              ))}
+            </div>
           </div>
         </section>
 

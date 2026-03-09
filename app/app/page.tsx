@@ -45,6 +45,37 @@ const heroSurfaces = [
   },
 ];
 
+const demoFlows = [
+  {
+    label: "Audio Notes",
+    title: "Speak -> mp3 -> text -> Ask AI",
+    copy:
+      "Recording lands as a real file first, becomes transcript text, then reopens the normal AI input with context attached.",
+    media: "/demo/audio-notes-flow.mp4",
+  },
+  {
+    label: "NetEase",
+    title: "Connect account -> search -> playback",
+    copy:
+      "Account auth, search results, and playback all stay in the same stack as the rest of the island instead of splitting into another player.",
+    media: "/demo/netease-flow.mp4",
+  },
+  {
+    label: "Studio",
+    title: "Remove watermark without leaving the island",
+    copy:
+      "Open the edit surface, run the image step, and land back on a result preview without falling through to a dashboard page.",
+    media: "/demo/studio-watermark-flow.mp4",
+  },
+  {
+    label: "Focus",
+    title: "Start focus, finish, log progress",
+    copy:
+      "Pomodoro stays quiet in compact mode, expands for control, then hands the result back into AI once the work block ends.",
+    media: "/demo/focus-flow.mp4",
+  },
+];
+
 const worksWith = [
   "OpenAI",
   "Gemini",
@@ -303,6 +334,54 @@ function SurfaceCard({
   );
 }
 
+function DemoFlowCard({
+  label,
+  title,
+  copy,
+  media,
+}: {
+  label: string;
+  title: string;
+  copy: string;
+  media: string;
+}) {
+  return (
+    <article className="overflow-hidden rounded-[2rem] border border-black/8 bg-white shadow-[0_28px_70px_rgba(15,23,42,0.08)]">
+      <div className="border-b border-black/8 bg-[#0a0b0f] p-4">
+        <div className="overflow-hidden rounded-[1.6rem] border border-white/8 bg-black">
+          <video
+            autoPlay
+            loop
+            muted
+            playsInline
+            preload="metadata"
+            className="aspect-[16/10] w-full bg-black object-cover"
+            src={media}
+          />
+        </div>
+      </div>
+      <div className="p-5">
+        <div className="text-[11px] uppercase tracking-[0.24em] text-neutral-500">
+          {label}
+        </div>
+        <h3 className="mt-3 text-xl font-semibold tracking-[-0.03em]">
+          {title}
+        </h3>
+        <p className="mt-3 text-sm leading-7 text-neutral-600">{copy}</p>
+        <Link
+          href={media}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-neutral-950"
+        >
+          Watch MP4
+          <ArrowUpRight className="size-4" />
+        </Link>
+      </div>
+    </article>
+  );
+}
+
 function FeatureCard({
   title,
   copy,
@@ -439,6 +518,12 @@ export default function Home() {
               Open dashboard
             </Link>
             <Link
+              href="#flows"
+              className="inline-flex items-center gap-2 rounded-full border border-black/10 px-5 py-3 text-sm font-medium text-neutral-700 transition hover:bg-white"
+            >
+              Watch flows
+            </Link>
+            <Link
               href={appConfig.links.source}
               target="_blank"
               rel="noopener noreferrer"
@@ -480,6 +565,52 @@ export default function Home() {
           <div className="grid gap-4">
             {heroSurfaces.map((surface) => (
               <SurfaceCard key={surface.label} {...surface} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="flows"
+        className="border-y border-black/8 bg-[linear-gradient(180deg,#ffffff_0%,#f1ede4_100%)]"
+      >
+        <div className="mx-auto max-w-6xl px-6 py-20 lg:px-10">
+          <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-end">
+            <div>
+              <SectionEyebrow>Watch Ark work</SectionEyebrow>
+              <h2 className="mt-4 max-w-3xl text-4xl font-semibold tracking-[-0.06em] sm:text-5xl">
+                Real island flows, not static mock cards.
+              </h2>
+              <p className="mt-5 max-w-2xl text-base leading-8 text-neutral-600">
+                These demos are generated from native proof screenshots in this
+                repo. The public site and GitHub README now show the same
+                end-to-end flows: capture, transform, handoff, and resume.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-3 lg:justify-end">
+              <Link
+                href="/open-source"
+                className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-5 py-3 text-sm font-medium text-neutral-950 transition hover:border-black"
+              >
+                Deployment docs
+                <ArrowRight className="size-4" />
+              </Link>
+              <Link
+                href={appConfig.links.source}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-full border border-black/10 px-5 py-3 text-sm font-medium text-neutral-700 transition hover:bg-white"
+              >
+                View source
+                <ArrowUpRight className="size-4" />
+              </Link>
+            </div>
+          </div>
+
+          <div className="mt-10 grid gap-5 lg:grid-cols-2">
+            {demoFlows.map((flow) => (
+              <DemoFlowCard key={flow.label} {...flow} />
             ))}
           </div>
         </div>

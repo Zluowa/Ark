@@ -4,6 +4,7 @@
   "packageManager": "pnpm@10.30.2",
   "scripts": {
     "onboard": "node scripts/onboard.mjs",
+    "build:demos": "node scripts/build-public-demos.mjs",
     "infra:up": "docker compose -f infra/docker-compose.yml up -d --build",
     "infra:down": "docker compose -f infra/docker-compose.yml down",
     "infra:logs": "docker compose -f infra/docker-compose.yml logs -f --tail=200",

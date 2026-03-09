@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/ark-header.png" alt="Ark — open-source orchestration for island-native workflows" width="960" />
+  <img src="docs/assets/ark-header.png" alt="Ark - open-source orchestration for island-native workflows" width="960" />
 </p>
 
 <p align="center">
@@ -37,11 +37,52 @@ Ark is a self-hosted stack that turns the Dynamic Island into a real execution s
 
 **Manage workflows, not windows.**
 
-|        | Step                   | Example                                                                 |
-| ------ | ---------------------- | ----------------------------------------------------------------------- |
-| **01** | Capture the signal     | Record audio, start screen capture, drop a file, open Studio, or resume |
-| **02** | Transform it in place  | Convert to text, edit images, reopen files, route into tools            |
-| **03** | Handoff with context   | Continue in AI, download artifacts, or reopen the right surface         |
+|        | Step                  | Example                                                                 |
+| ------ | --------------------- | ----------------------------------------------------------------------- |
+| **01** | Capture the signal    | Record audio, start screen capture, drop a file, open Studio, or resume |
+| **02** | Transform it in place | Convert to text, edit images, reopen files, route into tools            |
+| **03** | Handoff with context  | Continue in AI, download artifacts, or reopen the right surface         |
+
+<br/>
+
+## Watch the island flows
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="app/public/demo/audio-notes-flow.mp4">
+        <img src="app/public/demo/audio-notes-flow.gif" alt="Audio Notes island flow" />
+      </a>
+      <p><strong>Audio Notes</strong><br/>Speak, save the mp3, convert to text, then reopen Ask AI with the transcript attached.</p>
+    </td>
+    <td width="50%" valign="top">
+      <a href="app/public/demo/studio-watermark-flow.mp4">
+        <img src="app/public/demo/studio-watermark-flow.gif" alt="Studio watermark cleanup flow" />
+      </a>
+      <p><strong>Studio</strong><br/>Preview, edit, remove the watermark, and land back on the result preview inside the island flow.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="app/public/demo/netease-flow.mp4">
+        <img src="app/public/demo/netease-flow.gif" alt="NetEase auth and playback flow" />
+      </a>
+      <p><strong>NetEase</strong><br/>Connect the account, browse results, and move straight into playback from the stack.</p>
+    </td>
+    <td width="50%" valign="top">
+      <a href="app/public/demo/focus-flow.mp4">
+        <img src="app/public/demo/focus-flow.gif" alt="Focus island flow" />
+      </a>
+      <p><strong>Focus</strong><br/>Start a work block, complete it, and hand the result back into AI as the next action.</p>
+    </td>
+  </tr>
+</table>
+
+These demos are generated from real native proof screenshots in this repo:
+
+```bash
+pnpm build:demos
+```
 
 <br/>
 
@@ -139,8 +180,22 @@ Typical BYOK providers:
 3. Audio transcription: `VOLCENGINE_APPID` plus `VOLCENGINE_ACCESS_TOKEN`
 4. Search: `TAVILY_API_KEY`
 
-Detailed setup lives in [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md).
+Detailed setup lives in [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md).  
 Agent-first deployment guidance lives in [docs/AGENT_DEPLOYMENT.md](docs/AGENT_DEPLOYMENT.md).
+
+<br/>
+
+## Agent deployment
+
+If you are handing Ark to an agent or operator, use this contract:
+
+1. `pnpm onboard --dry-run --profile full`
+2. Fill `app/.env.local` with only your own BYOK values
+3. `pnpm --dir app dev`
+4. `cargo run --manifest-path desktop/Cargo.toml -p omniagent-island`
+5. `pnpm --dir app build && cargo test --manifest-path desktop/Cargo.toml -p omniagent-island -j 1`
+
+The full agent-facing checklist lives in [docs/AGENT_DEPLOYMENT.md](docs/AGENT_DEPLOYMENT.md).
 
 <br/>
 
