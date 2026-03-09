@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["island", "shared", "tauri-app", "launcher"]
+members = ["island", "shared", "launcher"]
 
 [workspace.package]
 version = "0.1.0"

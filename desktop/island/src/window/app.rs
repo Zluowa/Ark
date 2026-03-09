@@ -4194,22 +4194,21 @@ impl App {
 
     fn poll_tray(&mut self, window: &Arc<Window>, event_loop: &ActiveEventLoop) {
         let Some(tray) = &self.tray else { return };
-        if let Ok(event) = tray_icon::menu::MenuEvent::receiver().try_recv() {
-            match TrayAction::from_id(event.id, tray) {
-                Some(TrayAction::ToggleVisibility) => {
+        if let Some(action) = tray.poll_action() {
+            match action {
+                TrayAction::ToggleVisibility => {
                     self.visible = !self.visible;
                     window.set_visible(self.visible);
                     tray.update_item_text(self.visible);
                 }
-                Some(TrayAction::OpenSettings) => {
+                TrayAction::OpenSettings => {
                     let _ = std::process::Command::new(std::env::current_exe().unwrap())
                         .arg("--settings")
                         .spawn();
                 }
-                Some(TrayAction::Exit) => {
+                TrayAction::Exit => {
                     event_loop.exit();
                 }
-                None => (),
             }
         }
     }
