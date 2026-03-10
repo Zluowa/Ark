@@ -1,10 +1,5 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import {
-  Instrument_Serif,
-  Inter,
-  JetBrains_Mono,
-} from "next/font/google";
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowRight,
@@ -15,6 +10,8 @@ import {
   FolderOpen,
   Github,
   ImageIcon,
+  KeyRound,
+  Layers3,
   Mic,
   Monitor,
   Music4,
@@ -23,22 +20,7 @@ import {
 } from "lucide-react";
 import { CopyCommandButton } from "@/components/marketing/copy-command-button";
 import { appConfig } from "@/lib/config/app-config";
-
-const serif = Instrument_Serif({
-  subsets: ["latin"],
-  weight: "400",
-  variable: "--font-ark-serif",
-});
-
-const sans = Inter({
-  subsets: ["latin"],
-  variable: "--font-ark-sans",
-});
-
-const mono = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-ark-mono",
-});
+import { getPlatformContract } from "@/lib/server/platform-contract";
 
 const quickstartCommand = "pnpm onboard --yes --profile full";
 
@@ -284,6 +266,7 @@ const footerColumns = [
   {
     title: "Developers",
     links: [
+      { label: "Developer contract", href: "/developers" },
       { label: "GitHub", href: appConfig.links.source },
       { label: "Docs", href: "/open-source" },
       { label: "Dashboard", href: "/dashboard" },
@@ -349,10 +332,20 @@ function TerminalCard({
   );
 }
 
-export default function Home() {
+type HomeProps = {
+  searchParams?: Promise<{
+    evidence?: string;
+  }>;
+};
+
+export default async function Home({ searchParams }: HomeProps) {
+  const params = searchParams ? await searchParams : undefined;
+  const evidenceMode = params?.evidence === "1";
+  const contract = getPlatformContract();
+
   return (
     <main
-      className={`${serif.variable} ${sans.variable} ${mono.variable} min-h-screen bg-white font-[family:var(--font-ark-sans)] text-[#1a1a1a]`}
+      className="min-h-screen bg-white font-[family:var(--font-ark-sans)] text-[#1a1a1a]"
     >
       <header className="absolute inset-x-0 top-0 z-40 px-4 pt-4">
         <div className="mx-auto flex max-w-[760px] items-center justify-between rounded-full border border-white/15 bg-white/12 px-5 py-3 text-white shadow-[0_8px_32px_rgba(0,0,0,0.12)] backdrop-blur-2xl">
@@ -362,6 +355,12 @@ export default function Home() {
               className="text-sm text-white/78 transition hover:text-white"
             >
               Docs
+            </Link>
+            <Link
+              href="/developers"
+              className="text-sm text-white/78 transition hover:text-white"
+            >
+              Developers
             </Link>
             <Link
               href="#how-it-works"
@@ -394,27 +393,39 @@ export default function Home() {
 
       <section className="relative overflow-hidden bg-[#161922] text-white">
         <div className="absolute inset-0">
-          <img
-            src="/demo/full-island-tour.gif"
-            alt=""
+          <video
+            autoPlay={!evidenceMode}
+            loop={!evidenceMode}
+            muted
+            playsInline
+            preload="metadata"
             className="h-full w-full scale-110 object-cover opacity-28"
+            src="/demo/full-island-tour.mp4"
           />
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.18),transparent_32%),linear-gradient(180deg,rgba(11,14,20,0.32),rgba(11,14,20,0.88)_64%,#ffffff_100%)]" />
         </div>
 
         <div className="relative mx-auto flex min-h-[840px] max-w-[1140px] items-end px-6 pb-24 pt-40 lg:px-8">
           <div className="max-w-[760px]">
-            <SectionBadge>Open-source island-native orchestration</SectionBadge>
+            <SectionBadge>{"\u4e00\u53e5\u8bdd\u5c31\u5b8c\u4e8b\u3002"}</SectionBadge>
             <h1 className="mt-8 font-[family:var(--font-ark-serif)] text-6xl leading-[0.95] tracking-[-0.04em] text-white sm:text-7xl lg:text-[6.7rem]">
-              Ark
+              {"\u4e00\u53e5\u8bdd\u5c31\u5b8c\u4e8b\u3002"}
               <br />
-              Open-source orchestration
+              Island for people.
               <br />
-              for island-native workflows
+              API for agents.
             </h1>
             <p className="mt-6 max-w-[620px] text-lg leading-8 text-white/76 sm:text-xl">
-              Turn the Dynamic Island into a real workflow surface for capture,
-              files, Studio edits, playback, focus, and AI handoff.
+              Ark does not steal your attention. Dynamic Island and Web help
+              users finish the task in hand, while the same backend gives
+              enterprises and agents deterministic execution, async jobs, and
+              artifact delivery.
+            </p>
+            <p className="mt-4 max-w-[620px] text-sm leading-7 text-white/58">
+              {contract.tool_catalog.total_tools} tools are live in the current
+              catalog today. The public repo is self-hosted and BYOK now; the
+              managed one-key Ark service is the next layer, not a false claim
+              in this repo.
             </p>
             <div className="mt-9 flex flex-wrap gap-3">
               <Link
@@ -422,6 +433,13 @@ export default function Home() {
                 className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-medium text-[#12151c] transition hover:bg-[#f2efe9]"
               >
                 Get started
+                <ArrowRight className="size-4" />
+              </Link>
+              <Link
+                href="/developers"
+                className="inline-flex items-center gap-2 rounded-full border border-white/14 bg-white/10 px-5 py-3 text-sm font-medium text-white transition hover:bg-white/16"
+              >
+                Developers
                 <ArrowRight className="size-4" />
               </Link>
               <Link
@@ -434,6 +452,20 @@ export default function Home() {
                 <ArrowUpRight className="size-4" />
               </Link>
             </div>
+            <div className="mt-8 flex flex-wrap gap-3 text-sm text-white/68">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/8 px-4 py-2">
+                <Layers3 className="size-4" />
+                Island + Web + API
+              </div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/8 px-4 py-2">
+                <KeyRound className="size-4" />
+                One deployment key
+              </div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/8 px-4 py-2">
+                <Sparkles className="size-4" />
+                Artifact-first execution
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -442,38 +474,62 @@ export default function Home() {
         <div className="mx-auto grid max-w-[1140px] gap-10 px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
           <div className="max-w-[480px]">
             <h2 className="font-[family:var(--font-ark-serif)] text-[3.2rem] leading-[0.98] tracking-[-0.04em] text-[#1a1a1a] sm:text-[4rem]">
-              Quickstart
+              Three surfaces.
+              <br />
+              One capability layer.
             </h2>
             <p className="mt-5 text-lg leading-8 text-[#4f4a45]">
-              One onboarding command gets the website, dashboard, native island,
-              and optional local infra into the same public contract. No Ark
-              account required.
+              Island is the lightweight consumer surface. Web is the full
+              workspace. API is the execution surface for enterprises and
+              agents. They all run on the same backend contract.
+            </p>
+            <p className="mt-4 text-sm leading-7 text-[#6c655e]">
+              Self-host with BYOK today. Productize the same layer into a
+              managed one-key service later without rewriting the surface model.
             </p>
             <div className="mt-8 flex flex-wrap gap-5 text-sm">
               <Link
-                href={appConfig.links.source}
-                target="_blank"
-                rel="noopener noreferrer"
+                href="/developers"
                 className="inline-flex items-center gap-2 rounded-full bg-[#1a1a1a] px-5 py-3 font-medium text-white transition hover:bg-black"
               >
-                <Github className="size-4" />
-                View GitHub
+                Open developer contract
+                <ArrowRight className="size-4" />
               </Link>
               <Link
                 href="/open-source"
                 className="inline-flex items-center gap-2 text-[#4f4a45] transition hover:text-black"
               >
-                Read the docs
+                Self-hosting docs
                 <ArrowRight className="size-4" />
               </Link>
             </div>
           </div>
 
-          <TerminalCard
-            title="Quickstart"
-            subtitle="Agent-friendly onboarding command"
-            command={quickstartCommand}
-          />
+          <div className="space-y-5">
+            <TerminalCard
+              title="Quickstart"
+              subtitle="Agent-friendly onboarding command"
+              command={quickstartCommand}
+            />
+            <div className="grid gap-4 sm:grid-cols-2">
+              {contract.products.map((surface) => (
+                <article
+                  key={surface.id}
+                  className="rounded-[24px] border border-[#dfd8d0] bg-white p-5"
+                >
+                  <div className="text-xs uppercase tracking-[0.18em] text-[#8b847c]">
+                    {surface.audience}
+                  </div>
+                  <div className="mt-3 text-lg font-semibold tracking-[-0.03em] text-[#1a1a1a]">
+                    {surface.title}
+                  </div>
+                  <p className="mt-3 text-sm leading-7 text-[#5a554f]">
+                    {surface.summary}
+                  </p>
+                </article>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 
@@ -481,8 +537,8 @@ export default function Home() {
         <div className="mx-auto max-w-[1140px] px-6 lg:px-8">
           <div className="overflow-hidden rounded-[32px] border border-[#dfd8d0] bg-[#111317] shadow-[0_24px_100px_rgba(11,16,28,0.12)]">
             <video
-              autoPlay
-              loop
+              autoPlay={!evidenceMode}
+              loop={!evidenceMode}
               muted
               playsInline
               preload="metadata"
@@ -599,10 +655,14 @@ export default function Home() {
             </div>
 
             <div className="overflow-hidden rounded-[28px] border border-[#dfd8d0] bg-[#111317]">
-              <img
-                src="/demo/studio-watermark-flow.gif"
-                alt="Ark island Studio flow"
+              <video
+                autoPlay={!evidenceMode}
+                loop={!evidenceMode}
+                muted
+                playsInline
+                preload="metadata"
                 className="aspect-[4/5] w-full object-cover"
+                src="/demo/studio-watermark-flow.mp4"
               />
             </div>
           </div>
@@ -753,10 +813,14 @@ export default function Home() {
         className="relative overflow-hidden bg-[#131720] py-28 text-white"
       >
         <div className="absolute inset-0">
-          <img
-            src="/demo/audio-notes-flow.gif"
-            alt=""
+          <video
+            autoPlay={!evidenceMode}
+            loop={!evidenceMode}
+            muted
+            playsInline
+            preload="metadata"
             className="h-full w-full object-cover opacity-18"
+            src="/demo/audio-notes-flow.mp4"
           />
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(19,23,32,0.55),rgba(19,23,32,0.92))]" />
         </div>
@@ -831,7 +895,7 @@ export default function Home() {
 
           <div className="mt-14 flex flex-col gap-4 border-t border-white/12 pt-6 text-sm text-white/52 md:flex-row md:items-center md:justify-between">
             <span>2026 Ark. Open source under MIT.</span>
-            <span>The Dynamic Island, made useful.</span>
+            <span>{"\u4e00\u53e5\u8bdd\u5c31\u5b8c\u4e8b\u3002"}</span>
           </div>
         </div>
       </footer>

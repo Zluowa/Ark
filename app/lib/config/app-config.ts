@@ -7,9 +7,10 @@ export const appConfig = {
   shortName: "Ark",
   shellTitle: "Operator Workspace",
   description:
-    "Open-source orchestration for island-native workflows, with a self-hosted dashboard, native capture surfaces, and BYOK providers.",
+    "一句话就完事。 Island and Web for users, API for agents, all powered by Ark's shared execution layer.",
   links: {
     docs: "/open-source",
+    developers: "/developers",
     source: githubUrl,
   },
 } as const;

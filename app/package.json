@@ -9,6 +9,8 @@
     "smoke:chat-run": "node scripts/smoke-chat-run.mjs",
     "smoke:tools-all": "node scripts/smoke-tools-all.mjs",
     "smoke:tools-async": "node scripts/smoke-tools-async.mjs",
+    "smoke:video-subtitle": "node scripts/smoke-video-subtitle-proof.mjs",
+    "smoke:remote-video-subtitle": "node scripts/smoke-remote-video-subtitle-proof.mjs",
     "smoke:web-image": "node scripts/smoke-web-image.mjs",
     "smoke:img2img-fileproof": "node scripts/smoke-img2img-fileproof.mjs",
     "smoke:dispatch": "node scripts/smoke-dispatch.mjs",

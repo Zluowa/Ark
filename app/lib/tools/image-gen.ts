@@ -1,4 +1,4 @@
-﻿// @input: prompt + optional reference image URLs
+// @input: prompt + optional reference image URLs
 // @output: generated image file URL (supports text-to-image and image-to-image)
 // @position: AI image-generation tool (Gemini image preview via i-helios relay)
 

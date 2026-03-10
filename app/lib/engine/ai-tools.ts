@@ -1,4 +1,4 @@
-﻿// @input: v5 engine tool registry (manifests + handlers)
+// @input: v5 engine tool registry (manifests + handlers)
 // @output: Vercel AI SDK tool definitions for LLM function calling
 // @position: Bridge layer between v5 engine and AI SDK chat endpoint
 

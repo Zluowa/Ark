@@ -6,14 +6,21 @@ This guide describes the public, reproducible setup for the repo.
 
 Ark has three layers:
 
-1. `app`
-   Public website, dashboard, API routes, and tool orchestration
-2. `desktop/island`
+1. `desktop/island`
    Native Windows island shell
+2. `app`
+   Public website, dashboard, API routes, and tool orchestration
 3. `desktop/launcher`
    Public desktop launcher that starts the island and hands dashboard access to the browser
 4. `infra` plus `services/executor-fastapi`
    Optional persistence, artifact storage, and execution services
+
+Product framing:
+
+1. Island is the lightweight consumer surface
+2. Web is the full consumer workspace
+3. API is the enterprise and agent surface
+4. All three share the same backend capability layer
 
 ## Minimal Local Mode
 
@@ -39,6 +46,10 @@ cargo run --manifest-path desktop/Cargo.toml -p omniagent-island
 If you want an agent-friendly step-by-step guide, use [docs/AGENT_DEPLOYMENT.md](AGENT_DEPLOYMENT.md).
 
 ## Provider Setup
+
+Open-source mode is BYOK today. Operators fill provider env values and issue deployment API keys for their own Ark instance.
+
+This repo now also supports a local `managed_ark_key` mode for operator-run deployments. That mode can mint tenant-facing Ark keys, list and inspect managed tenants, show tenant usage, and rotate or revoke tenant-facing keys, but it is still not the future hosted SaaS billing/control plane.
 
 ### Chat And Image
 

@@ -1,4 +1,4 @@
-﻿// @input: softbuffer Surface, spring dimensions, PillState, content data
+// @input: softbuffer Surface, spring dimensions, PillState, content data
 // @output: Skia-rendered pill frame written to pixel buffer
 // @position: Single draw call per frame; owns the Skia surface cache
 

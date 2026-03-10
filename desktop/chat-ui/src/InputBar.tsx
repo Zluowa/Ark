@@ -1,4 +1,4 @@
-﻿// @input: onSend callback, disabled flag
+// @input: onSend callback, disabled flag
 // @output: Single-line input bar - brand dot, text input, send arrow
 // @position: Leaf UI component - user input capture, fixed 36px height
 

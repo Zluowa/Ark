@@ -1,4 +1,4 @@
-﻿param(
+param(
   [string]$OutputDir = "D:\Moss\projects\omniagent-new\desktop\test-screenshots\2026-03-07-island-music-polish-proof",
   [string]$BootstrapQuery = "/music Adele Hello",
   [string]$SearchQuery = "Adele",

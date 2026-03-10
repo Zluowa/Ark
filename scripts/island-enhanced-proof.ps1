@@ -1,4 +1,4 @@
-﻿param(
+param(
   [string]$OutputDir = "D:\Moss\projects\omniagent-new\desktop\test-screenshots\2026-03-06-island-enhanced-proof",
   [string]$WatermarkImagePath = "D:\Moss\projects\omniagent-new\app\test-screenshots\2026-03-06-enhanced-tools-proof\fixtures\fixture-watermark-bottom-right.png",
   [string]$CleanImagePath = "D:\Moss\projects\omniagent-new\app\test-screenshots\2026-03-06-enhanced-tools-proof\fixtures\fixture-clean-reference.png",

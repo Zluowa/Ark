@@ -1,47 +1,54 @@
 <p align="center">
-  <img src="docs/assets/ark-header.png" alt="Ark - open-source orchestration for island-native workflows" width="960" />
+  <img src="docs/assets/ark-header.png" alt="Ark header" width="960" />
 </p>
 
 <p align="center">
-  <strong>Ark</strong>
+  <strong>一句话就完事。</strong>
 </p>
 
 <p align="center">
-  <strong>Open-source orchestration for island-native workflows.</strong>
+  <strong>Island + Web for people. API for agents.</strong>
 </p>
 
 <p align="center">
   <a href="#quickstart"><strong>Quickstart</strong></a>
   &middot;
-  <a href="#watch-the-full-island-tour"><strong>Full Tour</strong></a>
+  <a href="#three-surfaces"><strong>Three Surfaces</strong></a>
   &middot;
-  <a href="#agent-deployment"><strong>Agent Deploy</strong></a>
+  <a href="docs/API_PLATFORM.md"><strong>API Platform</strong></a>
   &middot;
-  <a href="docs/SELF_HOSTING.md"><strong>Docs</strong></a>
+  <a href="docs/SELF_HOSTING.md"><strong>Self Hosting</strong></a>
   &middot;
   <a href="https://github.com/Zluowa/Ark"><strong>GitHub</strong></a>
 </p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License" /></a>
-  <a href="https://github.com/Zluowa/Ark/stargazers"><img src="https://img.shields.io/github/stars/Zluowa/Ark?style=flat" alt="Stars" /></a>
   <a href="https://github.com/Zluowa/Ark/actions/workflows/ci.yml"><img src="https://github.com/Zluowa/Ark/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <img src="https://img.shields.io/badge/platform-Windows-111111" alt="Windows" />
 </p>
 
 <p align="center">
-  <sub>Turn the Dynamic Island into a real workflow surface for capture, files, Studio edits, playback, focus, and AI handoff.</sub>
+  <sub>We do not hijack attention. We return attention to the user's hands, while Ark's shared backend executes the work.</sub>
 </p>
 
-<br/>
+## What is Ark?
 
-## Start here
+Ark is one shared capability layer with three product surfaces:
 
-- Watch the full island tour first so the product shape is obvious before you deploy it
-- Use `pnpm onboard --yes --profile full` as the public setup contract
-- Bring your own providers and keep all secrets in your own environment
+1. Dynamic Island for lightweight consumer interaction
+2. Web for full workflow, files, history, and configuration
+3. API for enterprises and agents
 
-<br/>
+The same backend powers all three.
+
+That backend is where Ark's real value lives:
+- deterministic execution
+- file upload and artifact delivery
+- sync and async jobs
+- download, conversion, extraction, transcription, and utility work
+
+The user-facing surfaces stay fast and simple. Upstream agents keep reasoning. Ark executes the work.
 
 ## Watch the full island tour
 
@@ -52,149 +59,69 @@
 </p>
 
 <p align="center">
-  <sub>Audio Notes -> Studio -> NetEase -> Focus. Real native proof media from this repo, not mockups.</sub>
+  <sub>Real repo proof media: Audio Notes -> Studio -> NetEase -> Focus.</sub>
 </p>
 
-If you are deploying Ark through a coding agent, this is the product story it should preserve: capture something, materialize a real artifact, reopen the next action in place, then hand it back to AI, files, or playback without detouring through another shell.
+## Three surfaces
 
-<br/>
+| Surface | Audience | Purpose |
+| --- | --- | --- |
+| Dynamic Island | Consumers | Smallest useful surface for capture, playback, editing, focus, and resume |
+| Web workspace | Consumers | Files, history, tool workbench, connections, and deeper control |
+| API | Enterprises and agents | Deterministic execution, async jobs, and artifact delivery |
+| Shared capability layer | Shared | Tool registry, files, execution runtime, jobs, and artifacts |
 
-## What is Ark?
+Full product positioning lives in [docs/PRODUCT_SURFACES.md](docs/PRODUCT_SURFACES.md).
 
-# Open-source orchestration for island-native workflows.
+## Why Ark exists
 
-**If a dashboard is a _workspace_, Ark is the _surface_.**
+### For people
 
-Ark is a self-hosted stack that turns the Dynamic Island into a real execution surface for capture, files, editing, music, focus, and AI handoff. The repo combines a Rust-native Windows island runtime, a Next.js public site and dashboard, and optional local infra for state and artifacts.
+Ark keeps the interaction small:
+- start from one sentence
+- continue from the island when possible
+- expand into web only when the workflow needs more room
 
-**Manage workflows, not windows.**
+### For agents and enterprises
 
-Ark is right for you if:
+Ark keeps execution off the model:
+- let the agent handle conversation and reasoning
+- send concrete work to Ark
+- get files and structured outputs back
 
-- you want the island to do real work, not just announce it
-- you want fewer jumps between recorder windows, dashboards, and file managers
-- you want a public repo you can fork, self-host, and extend with BYOK providers
-- you want one system that connects island, dashboard, files, and AI handoff
+This is why Ark is useful for agent products:
+- fewer wasted tokens
+- fewer custom utilities to rebuild
+- faster artifact delivery
+- one backend contract behind many tools
 
-|        | Step                  | Example                                                                 |
-| ------ | --------------------- | ----------------------------------------------------------------------- |
-| **01** | Capture the signal    | Record audio, start screen capture, drop a file, open Studio, or resume |
-| **02** | Transform it in place | Convert to text, edit images, reopen files, route into tools            |
-| **03** | Handoff with context  | Continue in AI, download artifacts, or reopen the right surface         |
+API platform notes live in [docs/API_PLATFORM.md](docs/API_PLATFORM.md).
 
-<br/>
+## Current product truth
 
-## Watch the island flows
+Ark already ships:
+- island-native audio capture, screen capture, Studio edits, playback, focus, and file resume
+- a public website and dashboard
+- API routes for platform discovery, tool registry, file upload, sync execution, async execution, and job polling
+- one-step local video subtitle generation for uploaded video files
+- remote subtitle extraction for real Bilibili, YouTube, Douyin, and direct downloadable video URLs
+- a local `managed_ark_key` service mode that lets platform operators issue, inspect, rotate, and revoke tenant-facing Ark keys
 
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <a href="app/public/demo/audio-notes-flow.mp4">
-        <img src="app/public/demo/audio-notes-flow.gif" alt="Audio Notes island flow" />
-      </a>
-      <p><strong>Audio Notes</strong><br/>Speak, save the mp3, convert to text, then reopen Ask AI with the transcript attached.</p>
-    </td>
-    <td width="50%" valign="top">
-      <a href="app/public/demo/studio-watermark-flow.mp4">
-        <img src="app/public/demo/studio-watermark-flow.gif" alt="Studio watermark cleanup flow" />
-      </a>
-      <p><strong>Studio</strong><br/>Preview, edit, remove the watermark, and land back on the result preview inside the island flow.</p>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <a href="app/public/demo/netease-flow.mp4">
-        <img src="app/public/demo/netease-flow.gif" alt="NetEase auth and playback flow" />
-      </a>
-      <p><strong>NetEase</strong><br/>Connect the account, browse results, and move straight into playback from the stack.</p>
-    </td>
-    <td width="50%" valign="top">
-      <a href="app/public/demo/focus-flow.mp4">
-        <img src="app/public/demo/focus-flow.gif" alt="Focus island flow" />
-      </a>
-      <p><strong>Focus</strong><br/>Start a work block, complete it, and hand the result back into AI as the next action.</p>
-    </td>
-  </tr>
-</table>
+Ark does **not** currently claim:
+- a universal video subtitle extractor
+- every future 100+ tool already live today
 
-These demos are generated from real native proof screenshots in this repo:
-
-```bash
-pnpm build:demos
-```
-
-<br/>
-
-## Ark is right for you if
-
-- You want the Dynamic Island to be a real workflow surface, not just a status ornament
-- You capture audio, screen, files, or image edits and want the next action to happen from the same surface
-- You need a local-first stack with BYOK providers instead of a hosted black box
-- You want a public repo you can fork, self-host, and extend without an internal cleanup sprint first
-- You want one system that connects the island, dashboard, tools, and file handoff instead of isolated widgets
-
-<br/>
-
-## Features
-
-| | |
-| --- | --- |
-| **Audio Notes** | Record, convert to text, then continue the transcript through normal AI input instead of a dead export flow. |
-| **Screen Record** | Use countdown, recording, saving, and summary as island-native states instead of detached recorder windows. |
-| **Studio** | Background removal, watermark cleanup, and image edits stay on the island and reopen into the correct surface. |
-| **Files** | Recent artifacts are resumable. The stack reopens the right file workflow instead of dropping you into a dashboard maze. |
-| **NetEase** | Search, playback, and account connection live inside the same stack as the rest of the island capabilities. |
-| **Focus** | Pomodoro is a calm island state with next actions and AI handoff, not a separate productivity mini-app. |
-| **File-first AI handoff** | Reports, transcripts, captures, and edits materialize as files first, then continue through AI with explicit user intent. |
-| **Self-hosted stack** | The public site, dashboard, native island, and optional local infra all ship in one reproducible repo. |
-| **BYOK providers** | No project account is required. Use your own models, gateways, storage, and speech or video services. |
-
-<br/>
-
-## Problems Ark solves
-
-| Without Ark | With Ark |
-| --- | --- |
-| You keep bouncing between recorder windows, dashboards, and tool pages just to finish one small task. | Ark keeps the flow on the island so the next useful action is always one surface away. |
-| Audio, screenshots, and edits turn into dead files that still need manual cleanup, naming, and follow-up. | Captures and edits flow directly into files, transcripts, markdown reports, and AI handoff. |
-| Your desktop assistant looks polished, but the real work still happens somewhere else. | The island itself becomes the execution surface for recording, editing, playback, focus, and file resumption. |
-| Open-source release work turns into an internal cleanup project because docs, envs, and links are not public-safe. | Ark ships with BYOK env examples, GitHub community files, self-hosting docs, and a public landing page out of the box. |
-
-<br/>
-
-## Why Ark is special
-
-| | |
-| --- | --- |
-| **Surface-native orchestration** | Ark models the island as the product surface, not as a notification shell attached to a dashboard later. |
-| **File-first state transitions** | Reports, transcripts, captures, and edits become explicit artifacts that can be reopened, downloaded, or sent back into AI. |
-| **Resumable local state** | The stack can reopen music, files, studio, focus, and recent results with the right priority instead of guessing from stale state. |
-| **Provider portability** | OpenAI-compatible chat, Gemini video analysis, Volcengine ASR, and local infra stay configurable without changing the public contract. |
-| **Native + web in one repo** | Rust island runtime, Next.js dashboard, self-hosting docs, and optional infra are versioned together as one product. |
-| **Public-safe release posture** | The repo is meant to be pushed as-is: license, templates, CI, docs, source links, and no bundled project secrets. |
-
-<br/>
-
-## What Ark is not
-
-| | |
-| --- | --- |
-| **Not a generic widget gallery.** | The goal is not to showcase mini-components. The goal is to make the island itself the place where workflows continue. |
-| **Not a hosted-only SaaS shell.** | Ark is designed to be forked, self-hosted, and BYOK. Public copy cannot rely on private infra to make sense. |
-| **Not dashboard-first.** | The dashboard exists, but the product story starts from the island and radiates outward into files, tools, and docs. |
-| **Not a single narrow tool.** | Capture, editing, playback, files, focus, and AI handoff all belong to the same surface system. |
-
-<br/>
+Current subtitle and transcription boundary is documented honestly in [docs/VIDEO_SUBTITLE_CAPABILITY.md](docs/VIDEO_SUBTITLE_CAPABILITY.md).
 
 ## Quickstart
 
-Open source. Self-hosted. No Ark account required.
+Open source. Self-hosted. BYOK today.
 
 ```bash
 pnpm onboard --yes --profile full
 ```
 
-If you want the checklist first:
+Checklist only:
 
 ```bash
 pnpm onboard --dry-run --profile full
@@ -212,90 +139,122 @@ pnpm --dir app dev
 cargo run --manifest-path desktop/Cargo.toml -p omniagent-island
 ```
 
-Typical BYOK providers:
+Detailed self-hosting:
+- [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md)
+- [docs/AGENT_DEPLOYMENT.md](docs/AGENT_DEPLOYMENT.md)
+- [docs/LOCAL_AGENT_SERVER.md](docs/LOCAL_AGENT_SERVER.md)
+- [docs/MCP_SERVER.md](docs/MCP_SERVER.md)
 
-1. Chat and image generation: `OPENAI_API_KEY` or your own compatible gateway
-2. Screen analysis: `GEMINI_API_KEY` or `GOOGLE_API_KEY`
-3. Audio transcription: `VOLCENGINE_APPID` plus `VOLCENGINE_ACCESS_TOKEN`
-4. Search: `TAVILY_API_KEY`
+## API quickstart
 
-Detailed setup lives in [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md).  
-Agent-first deployment guidance lives in [docs/AGENT_DEPLOYMENT.md](docs/AGENT_DEPLOYMENT.md).
+Public discovery:
 
-Public desktop note:
+```bash
+curl -s http://127.0.0.1:3010/api/v1/platform
+curl -s http://127.0.0.1:3010/api/v1/tools/registry
+```
 
-- The default public desktop build is `native island + web dashboard`
-- The launcher starts the island and hands the dashboard off to `http://127.0.0.1:3010/dashboard`
+Sync execution:
 
-<br/>
+```bash
+curl -X POST http://127.0.0.1:3010/api/v1/execute \
+  -H "X-API-Key: $ARK_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"tool":"pdf.compress","params":{"file_url":"https://example.com/input.pdf"}}'
+```
 
-## Agent deployment
+Async execution:
 
-If you are handing Ark to an agent or operator, use this contract:
+```bash
+curl -X POST http://127.0.0.1:3010/api/v1/execute/async \
+  -H "X-API-Key: $ARK_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"tool":"media.download_video","params":{"url":"https://www.bilibili.com/video/BV..."}}'
+```
 
-1. `pnpm onboard --dry-run --profile full`
-2. Fill `app/.env.local` with only your own BYOK values
-3. `pnpm --dir app dev`
-4. `cargo run --manifest-path desktop/Cargo.toml -p omniagent-island`
-5. `pnpm --dir app build && cargo test --manifest-path desktop/Cargo.toml -p omniagent-island -j 1`
+Today, in open-source mode:
+- operators bring provider keys
+- operators issue bootstrap deployment API keys
+- operators can mint and revoke scoped agent keys through `/api/v1/admin/api-keys`
+- operators can provision tenants and receive tenant bootstrap keys through `/api/v1/admin/tenants`
+- tenant bootstrap keys can mint tenant-scoped runtime keys without platform-wide admin
 
-The full agent-facing checklist lives in [docs/AGENT_DEPLOYMENT.md](docs/AGENT_DEPLOYMENT.md).
+Also available in this repo:
+- `OMNIAGENT_SERVICE_MODE=managed_ark_key`
+- `POST /api/v1/admin/managed-tenants`
+- `GET /api/v1/admin/managed-tenants`
+- `GET /api/v1/admin/managed-tenants/{tenantId}`
+- `PATCH /api/v1/admin/managed-tenants/{tenantId}`
+- `POST /api/v1/admin/managed-tenants/{tenantId}/keys`
+- `DELETE /api/v1/admin/managed-tenants/{tenantId}/keys/{keyId}`
+- platform operators can issue tenant-facing Ark keys without sending provider keys in the client request
+- platform operators can inspect tenant usage and recent execution records through the managed control plane
+- the managed mode still runs on your own infrastructure; SaaS billing and hosted multitenancy are separate future layers
 
-<br/>
+## Docs map
 
-## FAQ
-
-**What does a typical Ark setup look like?**  
-The public site and dashboard run from Next.js, the island runtime runs locally on Windows, and optional Compose services add durable state and artifacts.
-
-**Do I need Ark-hosted accounts or project keys?**  
-No. The repo is BYOK. You bring your own model, speech, video, or storage providers and keep secrets in your own environment.
-
-**Can I use just the website or just the island?**  
-Yes. The architecture is modular. You can run the website alone, the website plus local infra, or the full site-plus-native-island stack.
-
-**Is there a one-command onboarding path for agents?**  
-Yes. Run `pnpm onboard --yes --profile full` for the full local checklist and setup flow, or `pnpm onboard --dry-run --profile full` to preview it.
-
-**Why not just open a dashboard or a recorder app?**  
-Because Ark is optimized around fewer jumps. The point is to keep capture, AI, files, and resume actions on the smallest useful surface.
-
-<br/>
+- Product surfaces: [docs/PRODUCT_SURFACES.md](docs/PRODUCT_SURFACES.md)
+- API platform: [docs/API_PLATFORM.md](docs/API_PLATFORM.md)
+- Video subtitle boundary: [docs/VIDEO_SUBTITLE_CAPABILITY.md](docs/VIDEO_SUBTITLE_CAPABILITY.md)
+- MCP server: [docs/MCP_SERVER.md](docs/MCP_SERVER.md)
+- Self hosting: [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md)
+- Agent deployment: [docs/AGENT_DEPLOYMENT.md](docs/AGENT_DEPLOYMENT.md)
+- Local agent server: [docs/LOCAL_AGENT_SERVER.md](docs/LOCAL_AGENT_SERVER.md)
+- TypeScript SDK: [sdk/typescript/README.md](sdk/typescript/README.md)
+- Python SDK: [sdk/python/README.md](sdk/python/README.md)
 
 ## Development
 
 ```bash
 pnpm --dir app typecheck
 pnpm --dir app build
+pnpm --dir app smoke:video-subtitle
+pnpm sdk:build:ts
+pnpm mcp:smoke
+pnpm local:server:smoke
 cargo test --manifest-path desktop/Cargo.toml -p omniagent-island -j 1
 node scripts/check-task-delivery.mjs
 node scripts/check-task-delivery.mjs --require-ui
 ```
 
-<br/>
+## FAQ
 
-## Roadmap
+### Is Ark only for agents?
 
-- Unify more native island surfaces under one visual language
-- Continue reducing dashboard-first flows in favor of file-first and island-first handoff
-- Harden provider portability and self-hosting defaults
-- Improve public documentation and onboarding for forks
+No. Dynamic Island and Web are for people. The API is for enterprises and agents. All three use the same backend layer.
 
-<br/>
+### Does the public repo already ship a hosted Ark key?
+
+Partially. The repo now ships a local `managed_ark_key` service mode for operator-managed deployments, including tenant issuance, managed-tenant inspection, usage visibility, and tenant-key rotation/revocation. It is not a hosted Ark SaaS billing/control-plane product yet.
+
+### Can one self-hosted Ark deployment serve multiple agent teams?
+
+Yes. The public repo now includes a local tenant control plane:
+- platform operators can create tenants with default quota policy
+- tenant creation returns a tenant bootstrap key
+- tenant bootstrap keys can mint and revoke their own runtime keys
+- suspended tenants immediately lose API access
+
+### Is Ark only a UI project?
+
+No. The UI surfaces are important, but the core product is the shared execution layer underneath them.
+
+### Does Ark already support universal video subtitle extraction?
+
+Partially. Ark now supports:
+- one-step local uploaded video to `transcript + txt + srt + vtt`
+- real Bilibili, YouTube, Douyin, and direct-download link subtitle extraction through `media.extract_subtitle`
+- Xiaohongshu through the same tool path when the deployment has a tenant XHS connection or `OMNIAGENT_XHS_COOKIE`
+
+It is still not a universal arbitrary-link subtitle product yet. The remaining boundary is documented in [docs/VIDEO_SUBTITLE_CAPABILITY.md](docs/VIDEO_SUBTITLE_CAPABILITY.md).
 
 ## Contributing
 
-We welcome contributions. See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-<br/>
+## Security
 
-## Community
-
-- GitHub Issues: https://github.com/Zluowa/Ark/issues
-- GitHub Discussions: https://github.com/Zluowa/Ark/discussions
-- Security policy: [SECURITY.md](SECURITY.md)
-
-<br/>
+See [SECURITY.md](SECURITY.md).
 
 ## License
 

@@ -42,6 +42,7 @@ export const redactSecret = (value: string | undefined): string | undefined => {
 };
 
 export type AuthMode = "trusted_local" | "api_key";
+export type ServiceMode = "self_hosted_byok" | "managed_ark_key";
 
 export type ApiKeyQuotaConfig = {
   burstPerMinute?: number;
@@ -101,8 +102,11 @@ export type ServerEnv = {
   securityJsonBodyMaxBytes: number;
   securityMultipartBodyMaxBytes: number;
   securityWriteRateLimitPerMinute: number;
+  serviceMode: ServiceMode;
   trustedLocalTenantId: string;
   usageStore: "postgres" | "local";
+  xhsBridgeUrl: string;
+  xhsCookie?: string;
   quotaDefaults: QuotaDefaults;
 };
 
@@ -159,6 +163,14 @@ const parseAuthMode = (value: string | undefined): AuthMode => {
     return "api_key";
   }
   return "trusted_local";
+};
+
+const parseServiceMode = (value: string | undefined): ServiceMode => {
+  const normalized = value?.trim().toLowerCase();
+  if (normalized === "managed_ark_key" || normalized === "managed") {
+    return "managed_ark_key";
+  }
+  return "self_hosted_byok";
 };
 
 const parseBoolean = (
@@ -405,6 +417,7 @@ export const getServerEnv = (): ServerEnv => {
     3600,
   );
   const authMode = parseAuthMode(process.env.OMNIAGENT_AUTH_MODE);
+  const serviceMode = parseServiceMode(process.env.OMNIAGENT_SERVICE_MODE);
   const trustedLocalTenantId =
     normalize(process.env.OMNIAGENT_TRUSTED_LOCAL_TENANT_ID) ?? "local-dev";
   const defaultScopes = parseScopes(process.env.OMNIAGENT_DEFAULT_SCOPES, [
@@ -503,6 +516,13 @@ export const getServerEnv = (): ServerEnv => {
     process.env.OMNIAGENT_OBSERVABILITY_WAIT_SAMPLE_LIMIT,
     1000,
   );
+  const xhsBridgeUrl = stripTrailingSlash(
+    normalize(process.env.OMNIAGENT_XHS_BRIDGE_URL) ??
+      "http://127.0.0.1:5556",
+  );
+  const xhsCookie =
+    normalize(process.env.OMNIAGENT_XHS_COOKIE) ??
+    normalize(process.env.XHS_COOKIE);
   const hasS3Config = Boolean(
     s3Endpoint && s3Bucket && s3AccessKey && s3SecretKey,
   );
@@ -549,9 +569,12 @@ export const getServerEnv = (): ServerEnv => {
     securityJsonBodyMaxBytes,
     securityMultipartBodyMaxBytes,
     securityWriteRateLimitPerMinute,
+    serviceMode,
     trustedLocalTenantId,
     usageStore:
       usageStoreHint === "local" || !databaseUrl ? "local" : "postgres",
+    xhsBridgeUrl,
+    xhsCookie,
     quotaDefaults,
   };
 };

@@ -411,13 +411,317 @@ const buildCaptureReportMarkdown = (
   return `${lines.join("\n")}\n`;
 };
 
+type SubtitleSegment = {
+  index: number;
+  start_ms: number;
+  end_ms: number;
+  text: string;
+};
+
+const subtitleMimeType = (format: "txt" | "srt" | "vtt" | "zip"): string => {
+  switch (format) {
+    case "txt":
+      return "text/plain; charset=utf-8";
+    case "srt":
+      return "application/x-subrip; charset=utf-8";
+    case "vtt":
+      return "text/vtt; charset=utf-8";
+    case "zip":
+      return "application/zip";
+  }
+};
+
+const sanitizeArtifactBasename = (value: string, fallback: string): string => {
+  const stem = value.replace(/\.[^.]+$/, "");
+  const safe = stem.replace(/[<>:"/\\|?*\u0000-\u001f]+/g, "-").trim();
+  return safe || fallback;
+};
+
+const parseDurationLike = (value: unknown): number | undefined => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    if (value <= 0) return undefined;
+    if (!Number.isInteger(value)) return Math.round(value * 1000);
+    return value;
+  }
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (/^\d{1,2}:\d{2}:\d{2}(?:\.\d+)?$/.test(trimmed)) {
+    const [hours, minutes, seconds] = trimmed.split(":");
+    const totalSeconds =
+      Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds);
+    return Math.round(totalSeconds * 1000);
+  }
+  const numeric = Number(trimmed);
+  if (!Number.isFinite(numeric) || numeric <= 0) return undefined;
+  if (trimmed.includes(".")) {
+    return Math.round(numeric * 1000);
+  }
+  return numeric;
+};
+
+const pickObjectNumber = (
+  object: Record<string, unknown>,
+  keys: string[],
+): number | undefined => {
+  for (const key of keys) {
+    const parsed = parseDurationLike(object[key]);
+    if (parsed !== undefined) return parsed;
+  }
+  return undefined;
+};
+
+const pickObjectText = (
+  object: Record<string, unknown>,
+  keys: string[],
+): string => {
+  for (const key of keys) {
+    const text = clean(object[key]);
+    if (text) return text;
+  }
+  return "";
+};
+
+const splitTranscriptSentences = (transcript: string): string[] => {
+  const normalized = transcript
+    .replace(/\r/g, "\n")
+    .split(/\n+/g)
+    .flatMap((line) =>
+      line
+        .split(/(?<=[。！？!?；;.!?])\s+/g)
+        .map((part) => part.trim())
+        .filter(Boolean),
+    )
+    .filter(Boolean);
+  if (normalized.length > 0) return normalized;
+  const fallback = transcript.trim();
+  return fallback ? [fallback] : [];
+};
+
+const buildFallbackSubtitleSegments = (
+  transcript: string,
+  durationMs: number,
+): SubtitleSegment[] => {
+  const parts = splitTranscriptSentences(transcript);
+  if (!parts.length) return [];
+  const totalDuration = Math.max(
+    durationMs || parts.length * 2500,
+    parts.length * 1200,
+  );
+  const slot = Math.max(1200, Math.round(totalDuration / parts.length));
+  return parts.map((text, index) => {
+    const startMs = Math.min(totalDuration - 1, index * slot);
+    const isLast = index === parts.length - 1;
+    const endMs = isLast
+      ? totalDuration
+      : Math.min(totalDuration, (index + 1) * slot);
+    return {
+      index: index + 1,
+      start_ms: startMs,
+      end_ms: Math.max(startMs + 800, endMs),
+      text,
+    };
+  });
+};
+
+const buildSubtitleSegments = (
+  transcript: string,
+  utterances: unknown[],
+  durationMs: number,
+): SubtitleSegment[] => {
+  const fromUtterances = utterances
+    .map((item) => {
+      if (!item || typeof item !== "object") return undefined;
+      const record = item as Record<string, unknown>;
+      const text = pickObjectText(record, [
+        "text",
+        "utterance",
+        "transcript",
+        "sentence",
+      ]);
+      if (!text) return undefined;
+      const startMs = pickObjectNumber(record, [
+        "start_ms",
+        "start",
+        "start_time_ms",
+        "start_time",
+      ]);
+      const endMs = pickObjectNumber(record, [
+        "end_ms",
+        "end",
+        "end_time_ms",
+        "end_time",
+      ]);
+      if (startMs === undefined || endMs === undefined || endMs <= startMs) {
+        return undefined;
+      }
+      return {
+        index: 0,
+        start_ms: startMs,
+        end_ms: endMs,
+        text,
+      };
+    })
+    .filter((item): item is SubtitleSegment => Boolean(item))
+    .sort((a, b) => a.start_ms - b.start_ms)
+    .map((item, index) => ({
+      ...item,
+      index: index + 1,
+    }));
+
+  if (fromUtterances.length > 0) {
+    return fromUtterances;
+  }
+  return buildFallbackSubtitleSegments(transcript, durationMs);
+};
+
+const formatSubtitleTimestamp = (
+  valueMs: number,
+  format: "srt" | "vtt",
+): string => {
+  const clamped = Math.max(0, Math.round(valueMs));
+  const hours = Math.floor(clamped / 3_600_000);
+  const minutes = Math.floor((clamped % 3_600_000) / 60_000);
+  const seconds = Math.floor((clamped % 60_000) / 1000);
+  const millis = clamped % 1000;
+  const separator = format === "srt" ? "," : ".";
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}${separator}${String(millis).padStart(3, "0")}`;
+};
+
+export const buildSubtitleTexts = (
+  transcript: string,
+  utterances: unknown[],
+  durationMs: number,
+): {
+  txtText: string;
+  srtText: string;
+  vttText: string;
+  segments: SubtitleSegment[];
+} => {
+  const normalizedTranscript = transcript.trim();
+  const segments = buildSubtitleSegments(
+    normalizedTranscript || "Transcript was empty.",
+    utterances,
+    durationMs,
+  );
+  const txtText = normalizedTranscript || "Transcript was empty.";
+  const srtText = segments
+    .map(
+      (segment) =>
+        `${segment.index}\n${formatSubtitleTimestamp(segment.start_ms, "srt")} --> ${formatSubtitleTimestamp(segment.end_ms, "srt")}\n${segment.text}`,
+    )
+    .join("\n\n");
+  const vttBody = segments
+    .map(
+      (segment) =>
+        `${formatSubtitleTimestamp(segment.start_ms, "vtt")} --> ${formatSubtitleTimestamp(segment.end_ms, "vtt")}\n${segment.text}`,
+    )
+    .join("\n\n");
+  return {
+    txtText,
+    srtText,
+    vttText: `WEBVTT\n\n${vttBody}\n`,
+    segments,
+  };
+};
+
+const CRC32_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let index = 0; index < 256; index += 1) {
+    let value = index;
+    for (let bit = 0; bit < 8; bit += 1) {
+      value = (value & 1) === 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+    }
+    table[index] = value >>> 0;
+  }
+  return table;
+})();
+
+const crc32 = (buffer: Buffer): number => {
+  let value = 0xffffffff;
+  for (const byte of buffer) {
+    value = CRC32_TABLE[(value ^ byte) & 0xff] ^ (value >>> 8);
+  }
+  return (value ^ 0xffffffff) >>> 0;
+};
+
+const createZipBundle = (
+  baseName: string,
+  files: Array<{ name: string; contents: string }>,
+): { path: string; fileName: string } => {
+  const zipName = `${baseName}-subtitles.zip`;
+  const zipPath = join(tmpdir(), `omni-subtitles-${randomUUID()}.zip`);
+  const localParts: Buffer[] = [];
+  const centralParts: Buffer[] = [];
+  let offset = 0;
+
+  for (const file of files) {
+    const nameBuffer = Buffer.from(file.name, "utf8");
+    const dataBuffer = Buffer.from(file.contents, "utf8");
+    const checksum = crc32(dataBuffer);
+
+    const localHeader = Buffer.alloc(30);
+    localHeader.writeUInt32LE(0x04034b50, 0);
+    localHeader.writeUInt16LE(20, 4);
+    localHeader.writeUInt16LE(0, 6);
+    localHeader.writeUInt16LE(0, 8);
+    localHeader.writeUInt16LE(0, 10);
+    localHeader.writeUInt16LE(0, 12);
+    localHeader.writeUInt32LE(checksum, 14);
+    localHeader.writeUInt32LE(dataBuffer.length, 18);
+    localHeader.writeUInt32LE(dataBuffer.length, 22);
+    localHeader.writeUInt16LE(nameBuffer.length, 26);
+    localHeader.writeUInt16LE(0, 28);
+    localParts.push(localHeader, nameBuffer, dataBuffer);
+
+    const centralHeader = Buffer.alloc(46);
+    centralHeader.writeUInt32LE(0x02014b50, 0);
+    centralHeader.writeUInt16LE(20, 4);
+    centralHeader.writeUInt16LE(20, 6);
+    centralHeader.writeUInt16LE(0, 8);
+    centralHeader.writeUInt16LE(0, 10);
+    centralHeader.writeUInt16LE(0, 12);
+    centralHeader.writeUInt16LE(0, 14);
+    centralHeader.writeUInt32LE(checksum, 16);
+    centralHeader.writeUInt32LE(dataBuffer.length, 20);
+    centralHeader.writeUInt32LE(dataBuffer.length, 24);
+    centralHeader.writeUInt16LE(nameBuffer.length, 28);
+    centralHeader.writeUInt16LE(0, 30);
+    centralHeader.writeUInt16LE(0, 32);
+    centralHeader.writeUInt16LE(0, 34);
+    centralHeader.writeUInt16LE(0, 36);
+    centralHeader.writeUInt32LE(0, 38);
+    centralHeader.writeUInt32LE(offset, 42);
+    centralParts.push(centralHeader, nameBuffer);
+
+    offset += localHeader.length + nameBuffer.length + dataBuffer.length;
+  }
+
+  const centralDirectory = Buffer.concat(centralParts);
+  const endRecord = Buffer.alloc(22);
+  endRecord.writeUInt32LE(0x06054b50, 0);
+  endRecord.writeUInt16LE(0, 4);
+  endRecord.writeUInt16LE(0, 6);
+  endRecord.writeUInt16LE(files.length, 8);
+  endRecord.writeUInt16LE(files.length, 10);
+  endRecord.writeUInt32LE(centralDirectory.length, 12);
+  endRecord.writeUInt32LE(offset, 16);
+  endRecord.writeUInt16LE(0, 20);
+
+  writeFileSync(
+    zipPath,
+    Buffer.concat([...localParts, centralDirectory, endRecord]),
+  );
+  return { path: zipPath, fileName: zipName };
+};
+
 const inferAudioFormat = (filePath: string): string => {
   const ext = extname(filePath).replace(/^\./, "").toLowerCase();
   if (ext === "m4a") return "mp4";
   return ext || "wav";
 };
 
-const normalizeAudioForAsr = async (sourcePath: string): Promise<string> => {
+export const normalizeAudioForAsr = async (sourcePath: string): Promise<string> => {
   const targetPath = join(tmpdir(), `omni-capture-asr-${randomUUID()}.wav`);
   const result = await runCommand(
     ffmpegBin(),
@@ -443,7 +747,7 @@ const normalizeAudioForAsr = async (sourcePath: string): Promise<string> => {
   return targetPath;
 };
 
-const transcribeWithVolcengine = async (
+export const transcribeWithVolcengine = async (
   audioPath: string,
   language: string,
 ): Promise<{
@@ -1094,6 +1398,202 @@ export const audioTranscribeSummary: ToolRegistryEntry = {
   manifest: audioTranscribeSummaryManifest,
   handler: audioTranscribeSummaryHandler,
   timeout: LONG_TIMEOUT_MS * 2,
+};
+
+const videoTranscribeSubtitleManifest: ToolManifest = {
+  id: "video.transcribe_subtitle",
+  name: "Video Transcribe Subtitle",
+  description:
+    "Transcribe a local video file into transcript, TXT, SRT, and VTT subtitles with one call.",
+  category: "video",
+  tags: [
+    "video",
+    "subtitle",
+    "caption",
+    "transcribe",
+    "srt",
+    "vtt",
+    "transcript",
+  ],
+  params: [
+    {
+      name: "file_url",
+      type: "file",
+      required: true,
+      description: "Uploaded local video file URL",
+      accept: [".mp4", ".mov", ".avi", ".mkv", ".webm"],
+    },
+    {
+      name: "language",
+      type: "string",
+      required: false,
+      description: "BCP-47 language code for ASR, defaults to zh-CN",
+    },
+  ],
+  output_type: "json",
+  keywords: [
+    "video subtitle",
+    "video transcript",
+    "caption",
+    "srt",
+    "vtt",
+    "字幕",
+    "提取字幕",
+    "视频转字幕",
+    "视频字幕",
+  ],
+  patterns: [
+    "video.*subtitle",
+    "video.*caption",
+    "video.*transcript",
+    "字幕.*视频",
+    "视频.*字幕",
+    "视频.*转字幕",
+  ],
+};
+
+const videoTranscribeSubtitleHandler: ToolHandler = async (params) => {
+  const start = Date.now();
+  const videoUrl = clean(params.file_url);
+  if (!videoUrl) {
+    return fail("BAD_REQUEST", "Missing video file URL.", start);
+  }
+
+  const ext =
+    extname(new URL(videoUrl, "http://127.0.0.1").pathname).replace(
+      /^\./,
+      "",
+    ) || "mp4";
+  const localVideoPath = join(
+    tmpdir(),
+    `omni-video-subtitle-${randomUUID()}.${ext}`,
+  );
+  const extractedAudioPath = join(
+    tmpdir(),
+    `omni-video-subtitle-audio-${randomUUID()}.wav`,
+  );
+  let normalizedAudioPath: string | undefined;
+  try {
+    writeFileSync(localVideoPath, await downloadFile(videoUrl));
+    const extractAudioResult = await runCommand(
+      ffmpegBin(),
+      [
+        "-y",
+        "-i",
+        localVideoPath,
+        "-vn",
+        "-ac",
+        "1",
+        "-ar",
+        "16000",
+        "-sample_fmt",
+        "s16",
+        extractedAudioPath,
+      ],
+      180_000,
+    );
+    if (extractAudioResult.exitCode !== 0) {
+      throw new Error(
+        extractAudioResult.stderr || "Failed to extract audio from video.",
+      );
+    }
+
+    normalizedAudioPath = await normalizeAudioForAsr(extractedAudioPath);
+    const transcription = await transcribeWithVolcengine(
+      normalizedAudioPath,
+      clean(params.language) || "zh-CN",
+    );
+    const transcript = transcription.text.trim();
+    const subtitles = buildSubtitleTexts(
+      transcript,
+      transcription.utterances,
+      transcription.durationMs,
+    );
+    const baseName = sanitizeArtifactBasename(
+      basename(localVideoPath),
+      "video-subtitles",
+    );
+    const textFileName = `${baseName}.txt`;
+    const srtFileName = `${baseName}.srt`;
+    const vttFileName = `${baseName}.vtt`;
+    const bundle = createZipBundle(baseName, [
+      { name: textFileName, contents: subtitles.txtText },
+      { name: srtFileName, contents: subtitles.srtText },
+      { name: vttFileName, contents: subtitles.vttText },
+    ]);
+
+    return {
+      status: "success",
+      output: {
+        tool: "video.transcribe_subtitle",
+        text: transcript || "Transcript was empty.",
+        transcript,
+        txt_text: subtitles.txtText,
+        srt_text: subtitles.srtText,
+        vtt_text: subtitles.vttText,
+        segments: subtitles.segments,
+        duration_ms: transcription.durationMs,
+        provider: transcription.provider,
+        utterances: transcription.utterances,
+        source_file_name: basename(localVideoPath),
+        subtitle_bundle_file_name: bundle.fileName,
+        artifacts: [
+          {
+            kind: "txt",
+            file_name: textFileName,
+            mime_type: subtitleMimeType("txt"),
+          },
+          {
+            kind: "srt",
+            file_name: srtFileName,
+            mime_type: subtitleMimeType("srt"),
+          },
+          {
+            kind: "vtt",
+            file_name: vttFileName,
+            mime_type: subtitleMimeType("vtt"),
+          },
+          {
+            kind: "bundle",
+            file_name: bundle.fileName,
+            mime_type: subtitleMimeType("zip"),
+          },
+        ],
+      },
+      output_url: bundle.path,
+      duration_ms: Date.now() - start,
+    };
+  } catch (error) {
+    return fail(
+      "VIDEO_SUBTITLE_TRANSCRIBE_FAILED",
+      error instanceof Error ? error.message : String(error),
+      start,
+    );
+  } finally {
+    try {
+      unlinkSync(localVideoPath);
+    } catch {
+      // ignore
+    }
+    try {
+      unlinkSync(extractedAudioPath);
+    } catch {
+      // ignore
+    }
+    if (normalizedAudioPath) {
+      try {
+        unlinkSync(normalizedAudioPath);
+      } catch {
+        // ignore
+      }
+    }
+  }
+};
+
+export const videoTranscribeSubtitle: ToolRegistryEntry = {
+  manifest: videoTranscribeSubtitleManifest,
+  handler: videoTranscribeSubtitleHandler,
+  timeout: LONG_TIMEOUT_MS * 3,
 };
 
 const videoAnalyzeSummaryManifest: ToolManifest = {

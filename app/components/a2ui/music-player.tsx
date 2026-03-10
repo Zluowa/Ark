@@ -1,4 +1,4 @@
-﻿// @input: Tool result with { songs: Song[] } from net.music_search
+// @input: Tool result with { songs: Song[] } from net.music_search
 // @output: Complete music player mini-app — search, browse, play
 // @position: A2UI showcase widget — "袖珍但强大"
 

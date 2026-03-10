@@ -3,7 +3,7 @@ param(
   [string]$ImagePath = "D:\\Moss\\projects\\omniagent-new\\app\\test-fixtures\\window-upload-proof\\sample.png",
   [string]$Instruction = "img2img keep the same subject and generate a compact dynamic-island style variation",
   [int]$ProcessingWaitSec = 4,
-  [int]$ResultWaitSec = 20
+  [int]$ResultWaitSec = 90
 )
 
 $ErrorActionPreference = "Stop"
@@ -79,18 +79,6 @@ function Get-ImageActionPreviewPoint {
   }
 }
 
-function Get-PreviewShrinkPoint {
-  $r = Get-IslandRect
-  $previewWidth = 340
-  $previewHeight = 340
-  $previewLeft = [int](($r.Width - $previewWidth) / 2)
-  $previewTop = 40
-  return @{
-    X = $previewLeft + [int]($previewWidth / 2)
-    Y = $previewTop + $previewHeight - 14
-  }
-}
-
 function Send-IslandCommand([hashtable]$CommandBody) {
   $json = $CommandBody | ConvertTo-Json -Compress
   $client = New-Object System.Net.WebClient
@@ -99,11 +87,40 @@ function Send-IslandCommand([hashtable]$CommandBody) {
   $null = $client.UploadString("http://127.0.0.1:9800", "POST", $json)
 }
 
+function Get-IslandDebugState([string]$FilePath) {
+  if (Test-Path $FilePath) {
+    Remove-Item $FilePath -Force
+  }
+  Send-IslandCommand @{ type = "write_debug_state"; path = $FilePath }
+  Start-Sleep -Milliseconds 160
+  if (-not (Test-Path $FilePath)) {
+    throw "debug state file was not created: $FilePath"
+  }
+  return Get-Content $FilePath -Raw | ConvertFrom-Json
+}
+
+function Wait-ForIslandState([string[]]$States, [int]$TimeoutSeconds, [string]$DebugPath) {
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  do {
+    $state = Get-IslandDebugState -FilePath $DebugPath
+    if ($null -ne $state -and $States -contains [string]$state.pill_state) {
+      return $state
+    }
+    Start-Sleep -Milliseconds 400
+  } while ((Get-Date) -lt $deadline)
+
+  $finalState = Get-IslandDebugState -FilePath $DebugPath
+  $actual = if ($null -eq $finalState) { "unknown" } else { [string]$finalState.pill_state }
+  throw "Timed out waiting for state [$($States -join ', ')]. Last state: $actual"
+}
+
 if (-not (Test-Path $ImagePath)) {
   throw "image path not found: $ImagePath"
 }
 
 New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
+Get-ChildItem -Path $OutDir -File -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+$debugPath = Join-Path $OutDir "_runtime-state.json"
 
 $port9800 = Get-NetTCPConnection -LocalPort 9800 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $port9800) { throw "9800 is not listening" }
@@ -121,15 +138,17 @@ Send-IslandCommand @{
 Start-Sleep -Seconds 1
 Capture-Island (Join-Path $OutDir "01-upload-triggered.png")
 
-Start-Sleep -Seconds $ProcessingWaitSec
+$null = Wait-ForIslandState -States @("image_processing") -TimeoutSeconds $ProcessingWaitSec -DebugPath $debugPath
 Capture-Island (Join-Path $OutDir "02-processing.png")
 
-Start-Sleep -Seconds $ResultWaitSec
+$resultState = Wait-ForIslandState -States @("image_action", "image_preview") -TimeoutSeconds $ResultWaitSec -DebugPath $debugPath
 Capture-Island (Join-Path $OutDir "03-image-action-or-result.png")
 
-$previewPoint = Get-ImageActionPreviewPoint
-Click-Relative -X $previewPoint.X -Y $previewPoint.Y
-Start-Sleep -Milliseconds 900
+if ([string]$resultState.pill_state -ne "image_preview") {
+  $previewPoint = Get-ImageActionPreviewPoint
+  Click-Relative -X $previewPoint.X -Y $previewPoint.Y
+}
+$null = Wait-ForIslandState -States @("image_preview") -TimeoutSeconds 12 -DebugPath $debugPath
 Capture-Island (Join-Path $OutDir "04-preview-expanded.png")
 
 Click-Relative -X 220 -Y 200
@@ -137,25 +156,22 @@ Start-Sleep -Milliseconds 900
 Capture-Island (Join-Path $OutDir "05-preview-still-expanded-after-inner-click.png")
 
 Click-Relative -X 8 -Y 8
-Start-Sleep -Milliseconds 900
-Capture-Island (Join-Path $OutDir "06-preview-still-expanded-after-outside-click.png")
-
-$shrinkPoint = Get-PreviewShrinkPoint
-Click-Relative -X $shrinkPoint.X -Y $shrinkPoint.Y
-Start-Sleep -Milliseconds 900
-Capture-Island (Join-Path $OutDir "07-shrunk-back-to-image-action.png")
+$collapsedState = Wait-ForIslandState -States @("idle") -TimeoutSeconds 8 -DebugPath $debugPath
+$collapsedState = Get-IslandDebugState -FilePath $debugPath
+$collapsedState | ConvertTo-Json -Depth 8 | Set-Content -Path (Join-Path $OutDir "06-outside-click-collapsed-state.json") -Encoding utf8
+Capture-Island (Join-Path $OutDir "06-outside-click-collapsed.png")
 
 Send-IslandCommand @{ type = "collapse" }
 Start-Sleep -Milliseconds 700
-Capture-Island (Join-Path $OutDir "08-back-to-base.png")
+Capture-Island (Join-Path $OutDir "07-back-to-base.png")
 
 Click-Relative -X 220 -Y 58
 Start-Sleep -Milliseconds 700
-Capture-Island (Join-Path $OutDir "09-input-opened.png")
+Capture-Island (Join-Path $OutDir "08-input-opened.png")
 
 Click-Relative -X 380 -Y 60
 Start-Sleep -Milliseconds 900
-Capture-Island (Join-Path $OutDir "10-tool-panel-last-result.png")
+Capture-Island (Join-Path $OutDir "09-tool-panel-last-result.png")
 
 Write-Host "[runtime-proof] done"
 Write-Host "[runtime-proof] outDir=$OutDir"

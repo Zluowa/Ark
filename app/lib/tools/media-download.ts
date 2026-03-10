@@ -2,12 +2,20 @@
 // @output: ToolRegistryEntry objects for 4 media tools (info/video/audio/subtitle)
 // @position: Multi-platform media download via public APIs + ffmpeg + server-side proxy
 
-import { createWriteStream, existsSync, unlinkSync } from "node:fs";
+import { createWriteStream, existsSync, unlinkSync, writeFileSync } from "node:fs";
 import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import type { ToolHandler, ToolManifest, ToolRegistryEntry } from "@/lib/engine/types";
 import { LONG_TIMEOUT_MS } from "@/lib/engine/types";
-import { tempFile, runCommand } from "./helpers";
+import { getServerEnv } from "@/lib/server/env";
+import {
+  buildSubtitleTexts,
+  normalizeAudioForAsr,
+  transcribeWithVolcengine,
+} from "./capture-ai";
+import { proxyFetch, proxyStreamToFile, tempFile, runCommand } from "./helpers";
 
 /* ── Shared types ── */
 
@@ -23,6 +31,25 @@ interface VideoInfo {
 }
 
 interface SubtitleEntry { index: number; start: string; end: string; text: string }
+
+type SubtitleBundle = {
+  title: string;
+  platform: string;
+  language: string;
+  subtitle_source: "official" | "automatic" | "asr";
+  txt_text: string;
+  srt_text: string;
+  vtt_text: string;
+  total_entries: number;
+  bundle_path: string;
+  bundle_file_name: string;
+};
+
+const MEDIA_FETCH_TIMEOUT_MS = 30_000;
+const MEDIA_SUBTITLE_FETCH_TIMEOUT_MS = 45_000;
+const MEDIA_PROXY_ENABLED = Boolean(
+  (process.env.MEDIA_PROXY || process.env.HTTPS_PROXY || process.env.HTTP_PROXY || "").trim(),
+);
 
 /* ── Shared utilities ── */
 
@@ -47,10 +74,316 @@ function secondsToSrt(s: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")},${String(ms).padStart(3, "0")}`;
 }
 
+function srtToVttTimestamp(value: string): string {
+  return value.replace(",", ".");
+}
+
+function entriesToSrt(entries: SubtitleEntry[]): string {
+  return entries
+    .map((entry) => `${entry.index}\n${entry.start} --> ${entry.end}\n${entry.text}`)
+    .join("\n\n");
+}
+
+function entriesToVtt(entries: SubtitleEntry[]): string {
+  const body = entries
+    .map(
+      (entry) =>
+        `${srtToVttTimestamp(entry.start)} --> ${srtToVttTimestamp(entry.end)}\n${entry.text}`,
+    )
+    .join("\n\n");
+  return `WEBVTT\n\n${body}\n`;
+}
+
+function subtitlePlainText(entries: SubtitleEntry[]): string {
+  return entries
+    .map((entry) => entry.text.trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
+function parseSrtEntries(source: string): SubtitleEntry[] {
+  const blocks = source
+    .trim()
+    .split(/\r?\n\r?\n/g)
+    .map((block) => block.trim())
+    .filter(Boolean);
+  const entries: SubtitleEntry[] = [];
+  for (const block of blocks) {
+    const lines = block.split(/\r?\n/g).map((line) => line.trim());
+    if (lines.length < 2) continue;
+    const maybeIndex = Number(lines[0]);
+    const timeLineIndex = Number.isFinite(maybeIndex) ? 1 : 0;
+    const timeLine = lines[timeLineIndex];
+    const text = lines.slice(timeLineIndex + 1).join(" ").trim();
+    const match = timeLine.match(
+      /(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})(?:\s+.*)?$/,
+    );
+    if (!match || !text) continue;
+    entries.push({
+      index: entries.length + 1,
+      start: match[1],
+      end: match[2],
+      text,
+    });
+  }
+  return entries;
+}
+
+function parseVttEntries(source: string): SubtitleEntry[] {
+  const lines = source.replace(/^\uFEFF/, "").split(/\r?\n/g);
+  const entries: SubtitleEntry[] = [];
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index].trim();
+    if (!line || line === "WEBVTT" || line.startsWith("NOTE")) {
+      index += 1;
+      continue;
+    }
+    const timingLine = line.includes("-->") ? line : lines[index + 1]?.trim() || "";
+    const textStartIndex = line.includes("-->") ? index + 1 : index + 2;
+    const match = timingLine.match(
+      /(\d{2}:\d{2}:\d{2}\.\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}\.\d{3})(?:\s+.*)?$/,
+    );
+    if (!match) {
+      index += 1;
+      continue;
+    }
+    const textLines: string[] = [];
+    let cursor = textStartIndex;
+    while (cursor < lines.length && lines[cursor].trim()) {
+      textLines.push(lines[cursor].trim());
+      cursor += 1;
+    }
+    const text = decodeHtmlEntities(
+      textLines.join(" ").replace(/<[^>]+>/g, "").trim(),
+    );
+    if (text) {
+      entries.push({
+        index: entries.length + 1,
+        start: match[1].replace(".", ","),
+        end: match[2].replace(".", ","),
+        text,
+      });
+    }
+    index = cursor + 1;
+  }
+  return entries;
+}
+
+function parseSubtitleEntries(text: string, format: string): SubtitleEntry[] {
+  if (format === "srt") return parseSrtEntries(text);
+  if (format === "vtt") return parseVttEntries(text);
+  return [];
+}
+
+function pickPreferredLanguage<T>(
+  requested: string,
+  languages: Array<[string, T]>,
+): [string, T] | undefined {
+  if (!languages.length) return undefined;
+  const raw = requested.trim().toLowerCase();
+  const base = raw.split(/[-_]/)[0];
+  const scored = languages
+    .map(([language, value]) => {
+      const normalized = language.toLowerCase();
+      let score = 0;
+      if (!raw) score = 1;
+      else if (normalized === raw) score = 100;
+      else if (normalized.startsWith(`${raw}-`) || normalized.startsWith(`${raw}_`))
+        score = 90;
+      else if (base && (normalized === base || normalized.startsWith(`${base}-`) || normalized.startsWith(`${base}_`)))
+        score = 80;
+      else if (raw && normalized.includes(raw)) score = 70;
+      else if (base && normalized.includes(base)) score = 60;
+      return { language, value, score };
+    })
+    .sort((a, b) => b.score - a.score || a.language.localeCompare(b.language));
+  if (scored[0].score <= 0 && raw) return undefined;
+  return [scored[0].language, scored[0].value];
+}
+
+function sanitizeArtifactBasename(value: string, fallback: string): string {
+  const stem = value.replace(/\.[^.]+$/, "");
+  const safe = stem.replace(/[<>:"/\\|?*\u0000-\u001f]+/g, "-").trim();
+  return safe || fallback;
+}
+
+function normalizeAsrLanguage(language: string): string {
+  const normalized = language.trim().toLowerCase();
+  if (!normalized) return "zh-CN";
+  if (normalized.startsWith("zh")) return "zh-CN";
+  if (normalized.startsWith("en")) return "en-US";
+  if (normalized.startsWith("ja")) return "ja-JP";
+  if (normalized.startsWith("ko")) return "ko-KR";
+  return language;
+}
+
+const CRC32_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let index = 0; index < 256; index += 1) {
+    let value = index;
+    for (let bit = 0; bit < 8; bit += 1) {
+      value = (value & 1) === 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+    }
+    table[index] = value >>> 0;
+  }
+  return table;
+})();
+
+function crc32(buffer: Buffer): number {
+  let value = 0xffffffff;
+  for (const byte of buffer) {
+    value = CRC32_TABLE[(value ^ byte) & 0xff] ^ (value >>> 8);
+  }
+  return (value ^ 0xffffffff) >>> 0;
+}
+
+function createZipBundle(
+  baseName: string,
+  files: Array<{ name: string; contents: string }>,
+): { path: string; fileName: string } {
+  const zipName = `${baseName}-subtitles.zip`;
+  const zipPath = join(tmpdir(), `omni-media-subtitles-${Date.now()}.zip`);
+  const localParts: Buffer[] = [];
+  const centralParts: Buffer[] = [];
+  let offset = 0;
+
+  for (const file of files) {
+    const nameBuffer = Buffer.from(file.name, "utf8");
+    const dataBuffer = Buffer.from(file.contents, "utf8");
+    const checksum = crc32(dataBuffer);
+
+    const localHeader = Buffer.alloc(30);
+    localHeader.writeUInt32LE(0x04034b50, 0);
+    localHeader.writeUInt16LE(20, 4);
+    localHeader.writeUInt16LE(0, 6);
+    localHeader.writeUInt16LE(0, 8);
+    localHeader.writeUInt16LE(0, 10);
+    localHeader.writeUInt16LE(0, 12);
+    localHeader.writeUInt32LE(checksum, 14);
+    localHeader.writeUInt32LE(dataBuffer.length, 18);
+    localHeader.writeUInt32LE(dataBuffer.length, 22);
+    localHeader.writeUInt16LE(nameBuffer.length, 26);
+    localHeader.writeUInt16LE(0, 28);
+    localParts.push(localHeader, nameBuffer, dataBuffer);
+
+    const centralHeader = Buffer.alloc(46);
+    centralHeader.writeUInt32LE(0x02014b50, 0);
+    centralHeader.writeUInt16LE(20, 4);
+    centralHeader.writeUInt16LE(20, 6);
+    centralHeader.writeUInt16LE(0, 8);
+    centralHeader.writeUInt16LE(0, 10);
+    centralHeader.writeUInt16LE(0, 12);
+    centralHeader.writeUInt16LE(0, 14);
+    centralHeader.writeUInt32LE(checksum, 16);
+    centralHeader.writeUInt32LE(dataBuffer.length, 20);
+    centralHeader.writeUInt32LE(dataBuffer.length, 24);
+    centralHeader.writeUInt16LE(nameBuffer.length, 28);
+    centralHeader.writeUInt16LE(0, 30);
+    centralHeader.writeUInt16LE(0, 32);
+    centralHeader.writeUInt16LE(0, 34);
+    centralHeader.writeUInt16LE(0, 36);
+    centralHeader.writeUInt32LE(0, 38);
+    centralHeader.writeUInt32LE(offset, 42);
+    centralParts.push(centralHeader, nameBuffer);
+
+    offset += localHeader.length + nameBuffer.length + dataBuffer.length;
+  }
+
+  const centralDirectory = Buffer.concat(centralParts);
+  const endRecord = Buffer.alloc(22);
+  endRecord.writeUInt32LE(0x06054b50, 0);
+  endRecord.writeUInt16LE(0, 4);
+  endRecord.writeUInt16LE(0, 6);
+  endRecord.writeUInt16LE(files.length, 8);
+  endRecord.writeUInt16LE(files.length, 10);
+  endRecord.writeUInt32LE(centralDirectory.length, 12);
+  endRecord.writeUInt32LE(offset, 16);
+  endRecord.writeUInt16LE(0, 20);
+
+  writeFileSync(zipPath, Buffer.concat([...localParts, centralDirectory, endRecord]));
+  return { path: zipPath, fileName: zipName };
+}
+
+function buildSubtitleBundle(
+  title: string,
+  platform: string,
+  language: string,
+  subtitleSource: "official" | "automatic",
+  entries: SubtitleEntry[],
+): SubtitleBundle {
+  const txtText = subtitlePlainText(entries);
+  const srtText = entriesToSrt(entries);
+  const vttText = entriesToVtt(entries);
+  const baseName = sanitizeArtifactBasename(title, `${platform}-subtitle`);
+  const bundle = createZipBundle(baseName, [
+    { name: `${baseName}.txt`, contents: txtText },
+    { name: `${baseName}.srt`, contents: srtText },
+    { name: `${baseName}.vtt`, contents: vttText },
+  ]);
+  return {
+    title,
+    platform,
+    language,
+    subtitle_source: subtitleSource,
+    txt_text: txtText,
+    srt_text: srtText,
+    vtt_text: vttText,
+    total_entries: entries.length,
+    bundle_path: bundle.path,
+    bundle_file_name: bundle.fileName,
+  };
+}
+
 async function streamToFile(url: string, dest: string, headers: Record<string, string>): Promise<void> {
-  const res = await fetch(url, { headers });
-  if (!res.ok) throw new Error(`下载流失败: ${res.status}`);
-  await pipeline(Readable.fromWeb(res.body as never), createWriteStream(dest));
+  try {
+    const res = await fetch(url, {
+      headers,
+      signal: AbortSignal.timeout(MEDIA_FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) throw new Error(`下载流失败: ${res.status}`);
+    await pipeline(Readable.fromWeb(res.body as never), createWriteStream(dest));
+  } catch (error) {
+    if (!MEDIA_PROXY_ENABLED || !/^https:\/\//i.test(url)) {
+      throw error;
+    }
+    await proxyStreamToFile(url, dest, headers);
+  }
+}
+
+async function fetchTextWithOptionalProxy(
+  url: string,
+  timeoutMs: number,
+  headers: Record<string, string> = {},
+): Promise<string> {
+  try {
+    const res = await fetch(url, {
+      headers,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    return await res.text();
+  } catch (directError) {
+    if (!MEDIA_PROXY_ENABLED) {
+      throw directError;
+    }
+    const proxied = await proxyFetch(url, { headers });
+    if (proxied.status >= 400) {
+      throw new Error(`HTTP ${proxied.status}`);
+    }
+    return proxied.body;
+  }
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -63,7 +396,10 @@ const BILI_H = {
 };
 
 async function biliGet(url: string): Promise<Record<string, unknown>> {
-  const res = await fetch(url, { headers: BILI_H });
+  const res = await fetch(url, {
+    headers: BILI_H,
+    signal: AbortSignal.timeout(MEDIA_FETCH_TIMEOUT_MS),
+  });
   if (!res.ok) throw new Error(`Bilibili API ${res.status}`);
   const json = await res.json() as Record<string, unknown>;
   if (json.code !== 0) throw new Error(`Bilibili ${json.code}: ${json.message}`);
@@ -73,7 +409,10 @@ async function biliGet(url: string): Promise<Record<string, unknown>> {
 async function parseBvid(url: string): Promise<string> {
   const n = url.startsWith("http") ? url : `https://${url}`;
   if (n.includes("b23.tv")) {
-    const res = await fetch(n, { headers: BILI_H });
+    const res = await fetch(n, {
+      headers: BILI_H,
+      signal: AbortSignal.timeout(MEDIA_FETCH_TIMEOUT_MS),
+    });
     return parseBvid(res.url);
   }
   const bv = n.match(/\/video\/(BV[a-zA-Z0-9]+)/);
@@ -154,7 +493,10 @@ async function biliSubtitles(url: string, lang: string): Promise<{ title: string
   if (!subs.length) throw new Error("该视频没有可用字幕");
 
   const picked = subs.find((s) => (s.lan as string).startsWith(lang)) ?? subs[0];
-  const res = await fetch(`https:${picked.subtitle_url}`, { headers: BILI_H });
+  const res = await fetch(`https:${picked.subtitle_url}`, {
+    headers: BILI_H,
+    signal: AbortSignal.timeout(MEDIA_SUBTITLE_FETCH_TIMEOUT_MS),
+  });
   if (!res.ok) throw new Error(`下载字幕失败: ${res.status}`);
   const raw = await res.json() as { body: Array<{ from: number; to: number; content: string }> };
 
@@ -274,9 +616,30 @@ function ytBaseArgs(): string[] {
   const proxy = process.env.MEDIA_PROXY || process.env.HTTPS_PROXY || "";
   const args: string[] = [];
   if (proxy) args.push("--proxy", proxy);
-  args.push("--js-runtimes", `node:${process.execPath}`);
+  args.push("--socket-timeout", "15");
+  args.push("--extractor-retries", "1");
+  args.push("--retries", "1");
+  args.push("--fragment-retries", "1");
   if (existsSync(YT_COOKIES_PATH)) args.push("--cookies", YT_COOKIES_PATH);
   return args;
+}
+
+function ytSubtitleArgs(): string[] {
+  return [
+    ...ytBaseArgs(),
+    "--ignore-no-formats-error",
+    "--no-js-runtimes",
+    "--extractor-args",
+    "youtube:player_client=ios;player_skip=webpage",
+  ];
+}
+
+function ytAudioArgs(): string[] {
+  return [
+    ...ytBaseArgs(),
+    "--extractor-args",
+    "youtube:player_client=android;player_skip=webpage",
+  ];
 }
 
 function throwYtError(stderr: string): never {
@@ -285,7 +648,23 @@ function throwYtError(stderr: string): never {
   throw new Error(`YouTube错误: ${stderr.slice(0, 300)}`);
 }
 
-type YtDlpMeta = { title?: string; thumbnail?: string; duration?: number; uploader?: string; channel?: string; view_count?: number; formats?: Array<{ format_id: string; ext: string; vcodec: string; height?: number; width?: number; resolution?: string; format_note?: string }> };
+type YtSubtitleTrack = {
+  ext?: string;
+  url?: string;
+  name?: string;
+};
+
+type YtDlpMeta = {
+  title?: string;
+  thumbnail?: string;
+  duration?: number;
+  uploader?: string;
+  channel?: string;
+  view_count?: number;
+  formats?: Array<{ format_id: string; ext: string; vcodec: string; height?: number; width?: number; resolution?: string; format_note?: string }>;
+  subtitles?: Record<string, YtSubtitleTrack[]>;
+  automatic_captions?: Record<string, YtSubtitleTrack[]>;
+};
 
 async function ytInfo(url: string): Promise<VideoInfo> {
   const r = await runCommand("yt-dlp", [...ytBaseArgs(), "-j", url], 60_000);
@@ -310,22 +689,249 @@ async function ytDownloadVideo(url: string): Promise<{ path: string; title: stri
   const dlR = await runCommand("yt-dlp", [
     ...ytBaseArgs(), "-f", "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720]/best",
     "--merge-output-format", "mp4", "--no-part", "-o", out, url,
-  ], 600_000);
+  ], 180_000);
   if (dlR.exitCode !== 0) { tryUnlink(out); throwYtError(dlR.stderr); }
   return { path: out, title: d.title ?? "YouTube Video", duration: d.duration ?? 0 };
 }
 
 async function ytDownloadAudio(url: string): Promise<{ path: string; title: string; duration: number }> {
-  const infoR = await runCommand("yt-dlp", [...ytBaseArgs(), "-j", url], 60_000);
+  const infoR = await runCommand("yt-dlp", [...ytAudioArgs(), "-j", url], 60_000);
   if (infoR.exitCode !== 0) throwYtError(infoR.stderr);
   const d = JSON.parse(infoR.stdout) as YtDlpMeta;
   const out = tempFile("mp3");
   const dlR = await runCommand("yt-dlp", [
-    ...ytBaseArgs(), "-x", "--audio-format", "mp3", "--audio-quality", "0",
+    ...ytAudioArgs(), "-x", "--audio-format", "mp3", "--audio-quality", "0",
     "--no-part", "-o", out, url,
-  ], 600_000);
+  ], 180_000);
   if (dlR.exitCode !== 0) { tryUnlink(out); throwYtError(dlR.stderr); }
   return { path: out, title: d.title ?? "YouTube Video", duration: d.duration ?? 0 };
+}
+
+async function ytDownloadAudioFast(url: string): Promise<{ path: string; title: string; duration: number }> {
+  const out = tempFile("mp3");
+  const dlR = await runCommand(
+    "yt-dlp",
+    [
+      ...ytAudioArgs(),
+      "-x",
+      "--audio-format",
+      "mp3",
+      "--audio-quality",
+      "0",
+      "--no-part",
+      "-o",
+      out,
+      url,
+    ],
+    45_000,
+  );
+  if (dlR.exitCode !== 0) {
+    tryUnlink(out);
+    throwYtError(dlR.stderr);
+  }
+  return {
+    path: out,
+    title: `youtube-${parseYtId(url)}`,
+    duration: 0,
+  };
+}
+
+async function ytSubtitles(url: string, lang: string): Promise<SubtitleBundle> {
+  const infoR = await runCommand(
+    "yt-dlp",
+    [...ytSubtitleArgs(), "--skip-download", "-J", url],
+    20_000,
+  );
+  if (infoR.exitCode !== 0) throwYtError(infoR.stderr);
+  const data = JSON.parse(infoR.stdout) as YtDlpMeta;
+  const manual = Object.entries(data.subtitles ?? {});
+  const automatic = Object.entries(data.automatic_captions ?? {});
+  const manualPick = pickPreferredLanguage(lang, manual);
+  const automaticPick = pickPreferredLanguage(lang, automatic);
+  const picked = manualPick ?? automaticPick;
+  if (!picked) {
+    throw new Error("This YouTube video does not expose usable subtitles.");
+  }
+
+  const subtitleSource: "official" | "automatic" = manualPick ? "official" : "automatic";
+  const [language, tracks] = picked;
+  const trackList = Array.isArray(tracks) ? tracks : [];
+  const vttTrack =
+    trackList.find((track) => track?.ext === "vtt" && typeof track.url === "string");
+  const srtTrack =
+    trackList.find((track) => track?.ext === "srt" && typeof track.url === "string") ??
+    vttTrack;
+  if (!vttTrack && !srtTrack) {
+    throw new Error("YouTube subtitles were listed but no downloadable subtitle track was available.");
+  }
+
+  const [vttTextRaw, srtTextRaw] = await Promise.all([
+    vttTrack?.url
+      ? fetchTextWithOptionalProxy(vttTrack.url, MEDIA_SUBTITLE_FETCH_TIMEOUT_MS)
+      : Promise.resolve(""),
+    srtTrack?.url
+      ? fetchTextWithOptionalProxy(srtTrack.url, MEDIA_SUBTITLE_FETCH_TIMEOUT_MS)
+      : Promise.resolve(""),
+  ]);
+
+  const vttEntries =
+    parseSubtitleEntries(vttTextRaw, vttTrack?.ext === "srt" ? "srt" : "vtt");
+  const srtEntries =
+    parseSubtitleEntries(srtTextRaw, srtTrack?.ext === "vtt" ? "vtt" : "srt");
+  const entries =
+    vttEntries.length > 0 ? vttEntries : srtEntries.length > 0 ? srtEntries : [];
+  if (!entries.length) {
+    throw new Error("YouTube subtitle tracks were fetched, but no subtitle entries could be parsed.");
+  }
+  return buildSubtitleBundle(
+    data.title ?? "YouTube Video",
+    "youtube",
+    language,
+    subtitleSource,
+    entries,
+  );
+}
+
+const DIRECT_VIDEO_EXTENSIONS = [
+  ".mp4",
+  ".mov",
+  ".m4v",
+  ".webm",
+  ".mkv",
+  ".avi",
+];
+
+function looksLikeDirectVideoUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const pathname = parsed.pathname.toLowerCase();
+    return DIRECT_VIDEO_EXTENSIONS.some((ext) => pathname.endsWith(ext));
+  } catch {
+    return false;
+  }
+}
+
+function directVideoExt(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const pathname = parsed.pathname.toLowerCase();
+    const matched = DIRECT_VIDEO_EXTENSIONS.find((ext) => pathname.endsWith(ext));
+    return matched ? matched.slice(1) : "mp4";
+  } catch {
+    return "mp4";
+  }
+}
+
+function directVideoTitle(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const last = parsed.pathname.split("/").filter(Boolean).pop() || "remote-video";
+    return decodeURIComponent(last.replace(/\.[a-z0-9]+$/i, "")) || "remote-video";
+  } catch {
+    return "remote-video";
+  }
+}
+
+async function directInfo(url: string): Promise<VideoInfo> {
+  const ext = directVideoExt(url);
+  return {
+    title: directVideoTitle(url),
+    thumbnail: "",
+    duration: 0,
+    uploader: new URL(url).hostname,
+    platform: "direct",
+    view_count: 0,
+    formats: [
+      {
+        format_id: "direct-file",
+        ext,
+        resolution: "unknown",
+        note: "Direct downloadable video URL",
+      },
+    ],
+  };
+}
+
+async function directDownloadVideo(url: string): Promise<{ path: string; title: string; duration: number }> {
+  const ext = directVideoExt(url);
+  const out = tempFile(ext);
+  await streamToFile(url, out, {});
+  return {
+    path: out,
+    title: directVideoTitle(url),
+    duration: 0,
+  };
+}
+
+async function directDownloadAudio(url: string): Promise<{ path: string; title: string; duration: number }> {
+  const video = await directDownloadVideo(url);
+  const out = tempFile("mp3");
+  try {
+    const r = await runCommand(
+      "ffmpeg",
+      ["-y", "-i", video.path, "-vn", "-c:a", "libmp3lame", "-q:a", "0", out],
+      300_000,
+    );
+    if (r.exitCode !== 0) {
+      throw new Error(`ffmpeg失败: ${r.stderr.slice(0, 200)}`);
+    }
+    return {
+      path: out,
+      title: video.title,
+      duration: video.duration,
+    };
+  } finally {
+    tryUnlink(video.path);
+  }
+}
+
+async function transcribeSubtitleFallback(
+  platform: "bilibili" | "youtube" | "douyin" | "xiaohongshu" | "direct",
+  language: string,
+  downloadAudio: () => Promise<{ path: string; title: string; duration: number }>,
+): Promise<SubtitleBundle> {
+  const audio = await downloadAudio();
+  let normalizedAudioPath: string | undefined;
+  try {
+    normalizedAudioPath = await normalizeAudioForAsr(audio.path);
+    const transcription = await transcribeWithVolcengine(
+      normalizedAudioPath,
+      normalizeAsrLanguage(language),
+    );
+    const transcript = transcription.text.trim();
+    const subtitles = buildSubtitleTexts(
+      transcript,
+      transcription.utterances,
+      transcription.durationMs || Math.max(0, audio.duration) * 1000,
+    );
+    const baseName = sanitizeArtifactBasename(
+      audio.title,
+      `${platform}-subtitle`,
+    );
+    const bundle = createZipBundle(baseName, [
+      { name: `${baseName}.txt`, contents: subtitles.txtText },
+      { name: `${baseName}.srt`, contents: subtitles.srtText },
+      { name: `${baseName}.vtt`, contents: subtitles.vttText },
+    ]);
+    return {
+      title: audio.title,
+      platform,
+      language,
+      subtitle_source: "asr",
+      txt_text: subtitles.txtText,
+      srt_text: subtitles.srtText,
+      vtt_text: subtitles.vttText,
+      total_entries: subtitles.segments.length,
+      bundle_path: bundle.path,
+      bundle_file_name: bundle.fileName,
+    };
+  } finally {
+    if (normalizedAudioPath) {
+      tryUnlink(audio.path, normalizedAudioPath);
+    } else {
+      tryUnlink(audio.path);
+    }
+  }
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -351,17 +957,29 @@ async function getXhsCookie(params: Record<string, unknown>): Promise<string> {
     const cred = await credentialStore.get(ctx.tenantId, "xhs");
     if (cred?.status === "active") return cred.credential;
   }
-  if (process.env.XHS_COOKIE) return process.env.XHS_COOKIE;
-  throw new Error("小红书需要授权。请前往 设置 → 连接 扫码连接小红书账号。");
+  const env = getServerEnv();
+  if (env.xhsCookie) return env.xhsCookie;
+  throw new Error(
+    "xhs_auth_required: Xiaohongshu subtitle extraction requires an active tenant connection or OMNIAGENT_XHS_COOKIE in the deployment environment.",
+  );
 }
 
 async function xhsApiCall(noteUrl: string, params: Record<string, unknown>): Promise<{ message: string; data: XhsNote }> {
   const cookie = await getXhsCookie(params);
-  const res = await fetch("http://127.0.0.1:5556/xhs/detail", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url: noteUrl, download: false, cookie }),
-  });
+  const env = getServerEnv();
+  let res: Response;
+  try {
+    res = await fetch(`${env.xhsBridgeUrl}/xhs/detail`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: noteUrl, download: false, cookie }),
+      signal: AbortSignal.timeout(MEDIA_FETCH_TIMEOUT_MS),
+    });
+  } catch {
+    throw new Error(
+      `xhs_bridge_unavailable: Xiaohongshu bridge is unavailable at ${env.xhsBridgeUrl}. Start the bridge service or configure OMNIAGENT_XHS_BRIDGE_URL for this deployment.`,
+    );
+  }
   if (!res.ok) throw new Error(`XHS API HTTP ${res.status}`);
   const json = await res.json() as { message: string; data: XhsNote };
   if (!json.data || Object.keys(json.data).length === 0) {
@@ -371,7 +989,9 @@ async function xhsApiCall(noteUrl: string, params: Record<string, unknown>): Pro
       const { credentialStore } = await import("@/lib/server/credential-store");
       await credentialStore.markExpired(ctx.tenantId, "xhs");
     }
-    throw new Error("小红书cookie已过期，请前往 设置 → 连接 重新扫码授权。");
+    throw new Error(
+      "xhs_auth_required: Xiaohongshu credential is expired. Reconnect the tenant account or refresh OMNIAGENT_XHS_COOKIE for this deployment.",
+    );
   }
   return json;
 }
@@ -447,12 +1067,13 @@ async function xhsDownloadAudio(url: string, params: Record<string, unknown>): P
    Platform router
    ══════════════════════════════════════════════════════════ */
 
-type Platform = "bilibili" | "douyin" | "youtube" | "xiaohongshu";
+type Platform = "bilibili" | "douyin" | "youtube" | "xiaohongshu" | "direct";
 const PLATFORMS: Array<{ name: Platform; match: (u: string) => boolean }> = [
   { name: "bilibili", match: (u) => /bilibili\.com|b23\.tv/i.test(u) },
-  { name: "douyin", match: (u) => /douyin\.com\/video/i.test(u) },
+  { name: "douyin", match: (u) => /douyin\.com\/video|iesdouyin\.com\/share\/video|v\.douyin\.com/i.test(u) },
   { name: "youtube", match: (u) => /youtube\.com|youtu\.be/i.test(u) },
   { name: "xiaohongshu", match: (u) => /xiaohongshu\.com|xhslink\.com|xhs\.link/i.test(u) },
+  { name: "direct", match: (u) => looksLikeDirectVideoUrl(u) },
 ];
 
 function detect(url: string): Platform | null {
@@ -477,19 +1098,23 @@ const UNSUPPORTED_MSG = [
 const videoInfoManifest: ToolManifest = {
   id: "media.video_info",
   name: "Media Video Info",
-  description: "获取视频信息（B站/抖音/YouTube/小红书 — 标题、时长、封面等）",
+  description: "获取视频信息（B站/抖音/YouTube/小红书/直链视频 — 标题、时长、封面等）",
   category: "video",
-  tags: ["video", "info", "bilibili", "douyin", "youtube", "xhs", "抖音", "b站", "油管", "小红书"],
-  params: [{ name: "url", type: "string", required: true, description: "视频链接（bilibili / douyin / youtube / xiaohongshu）" }],
+  tags: ["video", "info", "bilibili", "douyin", "youtube", "xhs", "direct", "抖音", "b站", "油管", "小红书"],
+  params: [{ name: "url", type: "string", required: true, description: "视频链接（bilibili / douyin / youtube / xiaohongshu / direct media url）" }],
   output_type: "json",
-  keywords: ["video info", "视频信息", "bilibili", "抖音", "douyin", "youtube", "油管", "小红书", "xhs"],
-  patterns: ["(bilibili|b站|douyin|抖音|youtube|油管|小红书|xhs).*info"],
+  keywords: ["video info", "视频信息", "bilibili", "抖音", "douyin", "youtube", "油管", "小红书", "xhs", "video url"],
+  patterns: ["(bilibili|b站|douyin|抖音|youtube|油管|小红书|xhs|video url).*info"],
 };
 
 type MediaFn<T> = (u: string, p: Record<string, unknown>) => Promise<T>;
 
 const infoFn: Record<Platform, MediaFn<VideoInfo>> = {
-  bilibili: (u) => biliInfo(u), douyin: (u) => douyinInfo(u), youtube: (u) => ytInfo(u), xiaohongshu: xhsInfo,
+  bilibili: (u) => biliInfo(u),
+  douyin: (u) => douyinInfo(u),
+  youtube: (u) => ytInfo(u),
+  xiaohongshu: xhsInfo,
+  direct: (u) => directInfo(u),
 };
 
 const videoInfoHandler: ToolHandler = async (params) => {
@@ -514,19 +1139,23 @@ export const mediaVideoInfo: ToolRegistryEntry = { manifest: videoInfoManifest, 
 const downloadVideoManifest: ToolManifest = {
   id: "media.download_video",
   name: "Media Download Video",
-  description: "下载视频MP4（B站480p / 抖音720p / YouTube 720p / 小红书图文或视频）",
+  description: "下载视频MP4（B站480p / 抖音720p / YouTube 720p / 小红书图文或视频 / 直链视频）",
   category: "video",
-  tags: ["download", "video", "bilibili", "douyin", "youtube", "xhs", "小红书"],
+  tags: ["download", "video", "bilibili", "douyin", "youtube", "xhs", "direct", "小红书"],
   params: [{ name: "url", type: "string", required: true, description: "视频链接" }],
   output_type: "file",
-  keywords: ["下载视频", "download video", "bilibili", "抖音", "douyin", "youtube", "油管", "小红书", "xhs"],
-  patterns: ["下载.*(bilibili|b站|douyin|抖音|youtube|油管|视频|小红书|xhs)"],
+  keywords: ["下载视频", "download video", "bilibili", "抖音", "douyin", "youtube", "油管", "小红书", "xhs", "video url"],
+  patterns: ["下载.*(bilibili|b站|douyin|抖音|youtube|油管|视频|小红书|xhs|video url)"],
 };
 
 type DlResult = { path: string; title: string; duration: number };
 
 const dlVideoFn: Record<Platform, MediaFn<DlResult>> = {
-  bilibili: (u) => biliDownloadVideo(u), douyin: (u) => douyinDownloadVideo(u), youtube: (u) => ytDownloadVideo(u), xiaohongshu: xhsDownloadVideo,
+  bilibili: (u) => biliDownloadVideo(u),
+  douyin: (u) => douyinDownloadVideo(u),
+  youtube: (u) => ytDownloadVideo(u),
+  xiaohongshu: xhsDownloadVideo,
+  direct: (u) => directDownloadVideo(u),
 };
 
 const downloadVideoHandler: ToolHandler = async (params) => {
@@ -563,17 +1192,21 @@ export const mediaDownloadVideo: ToolRegistryEntry = { manifest: downloadVideoMa
 const downloadAudioManifest: ToolManifest = {
   id: "media.download_audio",
   name: "Media Download Audio",
-  description: "从视频提取音频MP3（B站/抖音/YouTube/小红书视频笔记）",
+  description: "从视频提取音频MP3（B站/抖音/YouTube/小红书视频笔记/直链视频）",
   category: "video",
-  tags: ["download", "audio", "mp3", "bilibili", "douyin", "youtube", "xhs", "小红书"],
+  tags: ["download", "audio", "mp3", "bilibili", "douyin", "youtube", "xhs", "direct", "小红书"],
   params: [{ name: "url", type: "string", required: true, description: "视频链接" }],
   output_type: "file",
-  keywords: ["下载音频", "提取音频", "download audio", "youtube", "油管", "小红书", "xhs"],
+  keywords: ["下载音频", "提取音频", "download audio", "youtube", "油管", "小红书", "xhs", "video url"],
   patterns: [],
 };
 
 const dlAudioFn: Record<Platform, MediaFn<DlResult>> = {
-  bilibili: (u) => biliDownloadAudio(u), douyin: (u) => douyinDownloadAudio(u), youtube: (u) => ytDownloadAudio(u), xiaohongshu: xhsDownloadAudio,
+  bilibili: (u) => biliDownloadAudio(u),
+  douyin: (u) => douyinDownloadAudio(u),
+  youtube: (u) => ytDownloadAudio(u),
+  xiaohongshu: xhsDownloadAudio,
+  direct: (u) => directDownloadAudio(u),
 };
 
 const downloadAudioHandler: ToolHandler = async (params) => {
@@ -611,15 +1244,15 @@ export const mediaDownloadAudio: ToolRegistryEntry = { manifest: downloadAudioMa
 const extractSubtitleManifest: ToolManifest = {
   id: "media.extract_subtitle",
   name: "Media Extract Subtitle",
-  description: "提取视频字幕SRT（目前仅支持B站有官方字幕的视频）",
+  description: "Extract subtitles from supported media links with a unified TXT/SRT/VTT result contract.",
   category: "video",
-  tags: ["subtitle", "caption", "srt", "字幕", "bilibili"],
+  tags: ["subtitle", "caption", "srt", "vtt", "字幕", "bilibili", "youtube"],
   params: [
-    { name: "url", type: "string", required: true, description: "B站视频链接" },
-    { name: "language", type: "string", required: false, default: "zh-Hans", description: "语言代码" },
+    { name: "url", type: "string", required: true, description: "Supported media URL" },
+    { name: "language", type: "string", required: false, default: "zh-Hans", description: "Preferred subtitle language code" },
   ],
   output_type: "json",
-  keywords: ["字幕", "subtitle", "提取字幕"],
+  keywords: ["字幕", "subtitle", "caption", "提取字幕", "youtube subtitle", "bilibili subtitle"],
   patterns: [],
 };
 
@@ -628,11 +1261,67 @@ const extractSubtitleHandler: ToolHandler = async (params) => {
   const url = params.url as string;
   const lang = (params.language as string) ?? "zh-Hans";
   const p = detect(url);
-  if (p !== "bilibili") return fail("not_supported", "字幕提取目前仅支持B站", start);
+  if (!p) {
+    return fail(
+      "not_supported",
+      "Subtitle extraction supports Bilibili, YouTube, Douyin, Xiaohongshu, and direct downloadable video URLs.",
+      start,
+    );
+  }
   try {
-    const r = await biliSubtitles(url, lang);
-    const srt = r.entries.map((e) => `${e.index}\n${e.start} --> ${e.end}\n${e.text}`).join("\n\n");
-    return { status: "success", output: { ...r, total_entries: r.entries.length, srt_text: srt }, duration_ms: Date.now() - start };
+    let result: SubtitleBundle;
+    if (p === "bilibili") {
+      try {
+        const r = await biliSubtitles(url, lang);
+        result = buildSubtitleBundle(
+          r.title,
+          "bilibili",
+          r.language,
+          "official",
+          r.entries,
+        );
+      } catch {
+        result = await transcribeSubtitleFallback("bilibili", lang, () =>
+          biliDownloadAudio(url),
+        );
+      }
+    } else if (p === "youtube") {
+      try {
+        result = await ytSubtitles(url, lang);
+      } catch {
+        result = await transcribeSubtitleFallback("youtube", lang, () =>
+          ytDownloadAudioFast(url),
+        );
+      }
+    } else if (p === "douyin") {
+      result = await transcribeSubtitleFallback("douyin", lang, () =>
+        douyinDownloadAudio(url),
+      );
+    } else if (p === "xiaohongshu") {
+      result = await transcribeSubtitleFallback("xiaohongshu", lang, () =>
+        xhsDownloadAudio(url, params),
+      );
+    } else {
+      result = await transcribeSubtitleFallback("direct", lang, () =>
+        directDownloadAudio(url),
+      );
+    }
+    return {
+      status: "success",
+      output_url: result.bundle_path,
+      output: {
+        title: result.title,
+        platform: result.platform,
+        language: result.language,
+        subtitle_source: result.subtitle_source,
+        txt_text: result.txt_text,
+        srt_text: result.srt_text,
+        vtt_text: result.vtt_text,
+        total_entries: result.total_entries,
+        subtitle_bundle_file_name: result.bundle_file_name,
+      },
+      duration_ms: Date.now() - start,
+    };
   } catch (err) {
     return fail("media_error", (err as Error).message, start);
   }

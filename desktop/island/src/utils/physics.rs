@@ -1,4 +1,4 @@
-﻿// @input: target position, stiffness/damping params per frame
+// @input: target position, stiffness/damping params per frame
 // @output: smoothly animated f32 value with settled detection
 // @position: core spring engine for island geometry/content animation
 

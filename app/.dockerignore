@@ -1,0 +1,10 @@
+node_modules
+.next
+test-screenshots
+.moss
+.claude
+.env.local
+.tmp*
+playwright-report
+coverage
+tsconfig.tsbuildinfo

@@ -1,12 +1,13 @@
-// @input: none (static content, expandable with auth user data)
-// @output: hero greeting section with quick action CTAs
+// @input: live session data
+// @output: hero greeting section with workspace-aware quick action CTAs
 // @position: top section of the Home dashboard page
 
 "use client";
 
 import Link from "next/link";
-import { MessageSquare, Upload, Wrench } from "lucide-react";
+import { MessageSquare, Wrench } from "lucide-react";
 import { useT } from "@/lib/i18n";
+import { useArkSession } from "@/components/account/session-provider";
 
 function useGreeting() {
   const t = useT();
@@ -19,19 +20,22 @@ function useGreeting() {
 export function WelcomeHero() {
   const t = useT();
   const greeting = useGreeting();
+  const { session } = useArkSession();
 
   return (
     <div className="relative overflow-hidden rounded-xl border border-border bg-gradient-to-br from-emerald-500/10 via-background to-background p-6">
-      <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 to-transparent pointer-events-none" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-emerald-500/5 to-transparent" />
       <div className="relative">
-        <p className="text-xs font-medium text-emerald-500 uppercase tracking-wider mb-1">
+        <p className="mb-1 text-xs font-medium uppercase tracking-wider text-emerald-500">
           {greeting}
         </p>
         <h1 className="text-2xl font-bold text-foreground">
-          {t("hero.title")}
+          {session ? `${greeting}, ${session.user.displayName}` : t("hero.title")}
         </h1>
-        <p className="mt-1.5 text-sm text-muted-foreground max-w-md">
-          {t("hero.subtitle")}
+        <p className="mt-1.5 max-w-md text-sm text-muted-foreground">
+          {session
+            ? `Active workspace: ${session.workspace.name}. Your browser session now carries the same execution context that files, connections, and tools use underneath.`
+            : t("hero.subtitle")}
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <Link

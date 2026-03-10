@@ -1,4 +1,4 @@
-﻿
+
 // @input: image URLs, transform params, optional multi-file arrays
 // @output: tool registry entries for image transforms, enhancement, and watermark cleanup
 // @position: Sharp-powered image processing tools with AI fallback where needed

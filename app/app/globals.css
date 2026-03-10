@@ -63,6 +63,14 @@
 }
 
 :root {
+  --font-geist-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --font-geist-mono: "SFMono-Regular", "JetBrains Mono", ui-monospace, Menlo,
+    Consolas, monospace;
+  --font-ark-serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua",
+    Georgia, serif;
+  --font-ark-sans: var(--font-geist-sans);
+  --font-ark-mono: var(--font-geist-mono);
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.141 0.005 285.823);

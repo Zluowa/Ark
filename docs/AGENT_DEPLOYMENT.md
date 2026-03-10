@@ -1,6 +1,12 @@
 # Agent Deployment Guide
 
-This guide is for coding agents or operators using a coding agent to deploy Ark from a fresh clone.
+Ark has three product surfaces:
+
+1. Dynamic Island for consumers
+2. Web for consumers
+3. API for enterprises and agents
+
+This guide is for the agent or operator who needs to stand up the shared backend and verify that all three surfaces still point at the same contract.
 
 ## Fastest Path
 
@@ -41,6 +47,8 @@ Before launch, fill only the providers you actually need:
 2. `GEMINI_API_KEY` or `GOOGLE_API_KEY`
 3. `VOLCENGINE_APPID` and `VOLCENGINE_ACCESS_TOKEN`
 4. `TAVILY_API_KEY` when web search is needed
+
+In open-source mode, the operator issues deployment API keys for Ark. This repo now also ships a local `managed_ark_key` mode for operator-run deployments, including managed-tenant list/detail, tenant usage visibility, and tenant-key rotation/revocation, but it still does not claim hosted SaaS billing or hosted multitenant operations.
 
 ## Manual Verification
 

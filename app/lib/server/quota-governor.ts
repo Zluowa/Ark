@@ -4,6 +4,7 @@
 
 import { getServerEnv } from "@/lib/server/env";
 import { type AuthIdentity } from "@/lib/server/access-control";
+import { tenantRegistry } from "@/lib/server/tenant-registry";
 import { type AppError } from "@/lib/server/result";
 
 type TenantQuotaState = {
@@ -49,15 +50,22 @@ const normalizeLimit = (value: number | undefined): number | undefined => {
 
 const resolveLimits = (identity: AuthIdentity): ResolvedQuotaLimits => {
   const env = getServerEnv();
+  const tenantQuota = tenantRegistry.resolveQuota(identity.tenantId);
   return {
     burstPerMinute: normalizeLimit(
-      identity.quota?.burstPerMinute ?? env.quotaDefaults.burstPerMinute,
+      identity.quota?.burstPerMinute ??
+        tenantQuota?.burstPerMinute ??
+        env.quotaDefaults.burstPerMinute,
     ),
     concurrencyLimit: normalizeLimit(
-      identity.quota?.concurrencyLimit ?? env.quotaDefaults.concurrencyLimit,
+      identity.quota?.concurrencyLimit ??
+        tenantQuota?.concurrencyLimit ??
+        env.quotaDefaults.concurrencyLimit,
     ),
     monthlyLimit: normalizeLimit(
-      identity.quota?.monthlyLimit ?? env.quotaDefaults.monthlyLimit,
+      identity.quota?.monthlyLimit ??
+        tenantQuota?.monthlyLimit ??
+        env.quotaDefaults.monthlyLimit,
     ),
   };
 };

@@ -19,6 +19,7 @@ app/.真相源/
 .env
 .env.local
 .moss/
+deploy/*.env
 review-screenshots/
 test-screenshots/
 
@@ -39,6 +40,7 @@ service-logs/
 
 # Internal authoring and local-only files not meant for the public Ark repo
 AGENTS.md
+CLAUDE.md
 .githooks/
 .tmp-download-iopaint-models.ps1
 app/AGENTS.md

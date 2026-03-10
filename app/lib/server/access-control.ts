@@ -8,10 +8,17 @@ import {
   type ApiKeyConfig,
   type ApiKeyQuotaConfig,
 } from "@/lib/server/env";
+import { apiKeyRegistry } from "@/lib/server/api-key-registry";
 import { recordAuditEvent } from "@/lib/server/security-controls";
+import { tenantRegistry } from "@/lib/server/tenant-registry";
+import { resolveWebSession } from "@/lib/server/web-auth";
 import { type AppError } from "@/lib/shared/result";
 
 export type AccessScope =
+  | "keys:read"
+  | "keys:write"
+  | "tenants:read"
+  | "tenants:write"
   | "execute:read"
   | "execute:write"
   | "runs:read"
@@ -101,12 +108,33 @@ const identityFromApiKey = (record: ApiKeyConfig): AuthIdentity => {
   };
 };
 
-const hasScope = (identity: AuthIdentity, scope: AccessScope): boolean => {
+const identityFromWebSession = (
+  session: NonNullable<ReturnType<typeof resolveWebSession>>,
+): AuthIdentity => {
+  const scopes = new Set<string>([
+    "execute:read",
+    "execute:write",
+    "runs:read",
+  ]);
+  return {
+    apiKeyId: `web-session:${session.user.id}`,
+    scopes,
+    tenantId: session.workspace.tenantId,
+    trustedLocal: false,
+  };
+};
+
+export const hasScope = (identity: AuthIdentity, scope: AccessScope): boolean => {
   if (identity.scopes.has("admin:*")) {
     return true;
   }
   return identity.scopes.has(normalizeScope(scope));
 };
+
+export const hasAnyScope = (
+  identity: AuthIdentity,
+  scopes: readonly AccessScope[],
+): boolean => scopes.some((scope) => hasScope(identity, scope));
 
 const hasAllScopes = (
   identity: AuthIdentity,
@@ -121,13 +149,15 @@ const hasAllScopes = (
 };
 
 const resolveApiKeyIdentity = (apiKey: string): AuthIdentity | undefined => {
-  const env = getServerEnv();
-  const matched = env.apiKeys.find((entry) => entry.key === apiKey);
+  const matched = apiKeyRegistry.resolve(apiKey);
   if (!matched) {
     return undefined;
   }
   return identityFromApiKey(matched);
 };
+
+const tenantSuspendedError = (tenantId: string): AppError =>
+  authError(403, "tenant_suspended", `Tenant is suspended: ${tenantId}`);
 
 export const resolveOptionalIdentity = (
   req: Request,
@@ -139,6 +169,7 @@ export const resolveOptionalIdentity = (
   const requestId = req.headers.get("x-request-id")?.trim() || undefined;
   const traceId = requestId ?? randomUUID().slice(0, 12);
 
+  let apiKeyIdentity: AuthIdentity | undefined;
   if (apiKey) {
     const resolved = resolveApiKeyIdentity(apiKey);
     if (!resolved) {
@@ -156,18 +187,54 @@ export const resolveOptionalIdentity = (
         error: authError(401, "auth_invalid_credentials", "Invalid API key."),
       };
     }
+    apiKeyIdentity = resolved;
+  }
+
+  const webSession = resolveWebSession(req);
+  if (webSession) {
+    const identity = identityFromWebSession(webSession);
+    recordAuditEvent({
+      action: "auth.optional_web_session",
+      apiKeyId: identity.apiKeyId,
+      details: { auth_mode: env.authMode, workspace_id: webSession.workspace.id },
+      method,
+      outcome: "allowed",
+      requestId,
+      route,
+      tenantId: identity.tenantId,
+      traceId,
+    });
+    if (!tenantRegistry.isActive(identity.tenantId)) {
+      return {
+        ok: false,
+        error: tenantSuspendedError(identity.tenantId),
+      };
+    }
+    return { ok: true, identity };
+  }
+
+  if (apiKeyIdentity) {
     recordAuditEvent({
       action: "auth.optional_authorized",
-      apiKeyId: resolved.apiKeyId,
+      apiKeyId: apiKeyIdentity.apiKeyId,
       details: { auth_mode: env.authMode },
       method,
       outcome: "allowed",
       requestId,
       route,
-      tenantId: resolved.tenantId,
+      tenantId: apiKeyIdentity.tenantId,
       traceId,
     });
-    return { ok: true, identity: resolved };
+    if (
+      !apiKeyIdentity.trustedLocal &&
+      !tenantRegistry.isActive(apiKeyIdentity.tenantId)
+    ) {
+      return {
+        ok: false,
+        error: tenantSuspendedError(apiKeyIdentity.tenantId),
+      };
+    }
+    return { ok: true, identity: apiKeyIdentity };
   }
 
   if (env.authMode === "trusted_local") {
@@ -229,9 +296,16 @@ export const authorizeRequest = (
         error: authError(401, "auth_invalid_credentials", "Invalid API key."),
       };
     }
-  } else if (env.authMode === "trusted_local") {
+  }
+
+  const webSession = resolveWebSession(req);
+  if (webSession) {
+    identity = identityFromWebSession(webSession);
+  } else if (!identity && env.authMode === "trusted_local") {
     identity = trustedLocalIdentity();
-  } else {
+  }
+
+  if (!identity) {
     recordAuditEvent({
       action: "auth.missing_credentials",
       details: { auth_mode: env.authMode, required_scopes: requiredScopes },
@@ -246,14 +320,16 @@ export const authorizeRequest = (
       error: authError(
         401,
         "auth_missing_credentials",
-        "Missing API key. Provide `X-API-Key` or `Authorization: Bearer <key>`.",
+        "Missing API key or browser session.",
       ),
     };
   }
 
   if (!hasAllScopes(identity, requiredScopes)) {
     recordAuditEvent({
-      action: "auth.missing_scope",
+      action: identity.apiKeyId.startsWith("web-session:")
+        ? "auth.web_session_missing_scope"
+        : "auth.missing_scope",
       apiKeyId: identity.apiKeyId,
       details: { required_scopes: requiredScopes },
       method,
@@ -274,8 +350,28 @@ export const authorizeRequest = (
     };
   }
 
+  if (!identity.trustedLocal && !tenantRegistry.isActive(identity.tenantId)) {
+    recordAuditEvent({
+      action: "auth.tenant_suspended",
+      apiKeyId: identity.apiKeyId,
+      details: { tenant_id: identity.tenantId },
+      method,
+      outcome: "denied",
+      requestId,
+      route,
+      tenantId: identity.tenantId,
+      traceId,
+    });
+    return {
+      ok: false,
+      error: tenantSuspendedError(identity.tenantId),
+    };
+  }
+
   recordAuditEvent({
-    action: "auth.authorized",
+    action: identity.apiKeyId.startsWith("web-session:")
+      ? "auth.web_session_authorized"
+      : "auth.authorized",
     apiKeyId: identity.apiKeyId,
     details: { required_scopes: requiredScopes },
     method,

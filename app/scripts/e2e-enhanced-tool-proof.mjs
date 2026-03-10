@@ -1,4 +1,4 @@
-﻿import fs from "node:fs";
+import fs from "node:fs";
 import path from "node:path";
 import { chromium } from "playwright";
 import { createEnhancedProofFixtures } from "./_enhanced-proof-fixtures.mjs";

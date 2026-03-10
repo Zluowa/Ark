@@ -1,4 +1,4 @@
-﻿import { randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { frontendTools } from "@assistant-ui/react-ai-sdk";
 import {
   streamText,

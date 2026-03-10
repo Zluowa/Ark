@@ -1,4 +1,4 @@
-﻿// @input: PDF file URLs and processing params
+// @input: PDF file URLs and processing params
 // @output: ToolRegistryEntry objects for 5 PDF tools
 // @position: PDF processing tools using Python (PyMuPDF)
 

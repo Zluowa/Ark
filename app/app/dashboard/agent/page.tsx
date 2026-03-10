@@ -25,15 +25,10 @@ function PromptPrefill() {
 }
 
 export default function AgentPage() {
-  const chatHeaders = publicEnv.apiKey
-    ? { "X-API-Key": publicEnv.apiKey }
-    : undefined;
-
   const runtime = useChatRuntime({
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
     transport: new AssistantChatTransport({
       api: publicEnv.chatApiPath,
-      headers: chatHeaders,
     }),
   });
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, ArrowUpRight, FileCode2, Github, Server } from "lucide-react";
 import { appConfig } from "@/lib/config/app-config";
+import { getPlatformContract } from "@/lib/server/platform-contract";
 
 const quickstart = [
   "pnpm onboard --yes --profile full",
@@ -98,6 +99,8 @@ const faq = [
 ];
 
 export default function OpenSourcePage() {
+  const contract = getPlatformContract();
+
   return (
     <main className="min-h-screen bg-[#f6f2e8] text-neutral-950">
       <div className="h-3 bg-[linear-gradient(90deg,#6ed7ff_0%,#c6f36d_28%,#ffb867_58%,#ff84d4_100%)]" />
@@ -108,16 +111,24 @@ export default function OpenSourcePage() {
             Open source guide
           </p>
           <h1 className="mt-4 text-5xl font-semibold tracking-[-0.06em] sm:text-6xl">
-            Ship the full island stack.
+            Self-host the full Ark stack.
           </h1>
           <p className="mt-6 text-lg leading-8 text-neutral-600">
-            This is the public-safe deployment contract for Ark: website,
-            dashboard, native island, optional local infra, and BYOK providers.
-            No private project dependency is required.
+            Ark has three public surfaces: Dynamic Island for users, Web for
+            full workflow control, and API for enterprises and agents. This
+            page documents the self-hosted contract behind all three.
           </p>
           <p className="mt-4 text-sm leading-7 text-neutral-500">
             Start with `pnpm onboard --yes --profile full`, or point a coding
-            agent at `docs/AGENT_DEPLOYMENT.md` and keep the same public setup path.
+            agent at `docs/AGENT_DEPLOYMENT.md` and keep the same public setup
+            path. The repo now includes a real local `managed_ark_key` mode for
+            operator-run deployments; the missing layer is hosted SaaS billing
+            and multitenant operations, not the key-issuance primitive itself.
+          </p>
+          <p className="mt-4 text-sm leading-7 text-neutral-500">
+            That local managed lane now includes managed-tenant listing, tenant
+            detail, recent-usage inspection, and tenant-key rotation/revocation
+            in addition to one-step tenant issuance.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
@@ -128,6 +139,30 @@ export default function OpenSourcePage() {
             >
               <Github className="size-4" />
               View source
+              <ArrowUpRight className="size-4" />
+            </Link>
+            <Link
+              href="/developers"
+              className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-5 py-3 text-sm font-medium text-neutral-950 transition hover:border-black"
+            >
+              Developer contract
+            </Link>
+            <Link
+              href="https://github.com/Zluowa/Ark/blob/main/docs/LOCAL_AGENT_SERVER.md"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-5 py-3 text-sm font-medium text-neutral-950 transition hover:border-black"
+            >
+              Local agent server
+              <ArrowUpRight className="size-4" />
+            </Link>
+            <Link
+              href="https://github.com/Zluowa/Ark/blob/main/docs/MCP_SERVER.md"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-5 py-3 text-sm font-medium text-neutral-950 transition hover:border-black"
+            >
+              MCP guide
               <ArrowUpRight className="size-4" />
             </Link>
             <Link
@@ -186,6 +221,52 @@ export default function OpenSourcePage() {
               ))}
             </div>
           </div>
+        </section>
+
+        <section className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
+          <article className="rounded-[2rem] border border-black/8 bg-white p-8">
+            <p className="text-[11px] uppercase tracking-[0.28em] text-neutral-500">
+              Product surfaces
+            </p>
+            <div className="mt-6 grid gap-4">
+              {contract.products.map((surface) => (
+                <div
+                  key={surface.id}
+                  className="rounded-[1.5rem] border border-black/8 bg-[#f7f3ea] px-4 py-4"
+                >
+                  <div className="text-xs uppercase tracking-[0.2em] text-neutral-500">
+                    {surface.audience}
+                  </div>
+                  <div className="mt-2 text-lg font-semibold">{surface.title}</div>
+                  <div className="mt-2 text-sm leading-7 text-neutral-600">
+                    {surface.summary}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <article className="rounded-[2rem] border border-black/8 bg-[#111214] p-8 text-white">
+            <p className="text-[11px] uppercase tracking-[0.28em] text-white/42">
+              Deployment modes
+            </p>
+            <div className="mt-6 space-y-4">
+              {contract.service_modes.map((mode) => (
+                <div
+                  key={mode.id}
+                  className="rounded-[1.5rem] border border-white/10 bg-white/6 px-4 py-4"
+                >
+                  <div className="text-xs uppercase tracking-[0.2em] text-white/42">
+                    {mode.status}
+                  </div>
+                  <div className="mt-2 text-lg font-semibold">{mode.title}</div>
+                  <div className="mt-2 text-sm leading-7 text-white/68">
+                    {mode.summary}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </article>
         </section>
 
         <section className="overflow-hidden rounded-[2rem] border border-black/8 bg-[#0f1014] text-white">

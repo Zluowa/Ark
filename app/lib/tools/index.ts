@@ -25,7 +25,12 @@ export {
 } from "./image-ai";
 export { videoCompress, videoConvert, videoTrim, videoToGif, videoExtractAudio } from "./video";
 export { audioConvert, audioTrim, audioCompress, audioNormalize } from "./audio";
-export { audioTranscribeText, audioTranscribeSummary, videoAnalyzeSummary } from "./capture-ai";
+export {
+  audioTranscribeText,
+  audioTranscribeSummary,
+  videoTranscribeSubtitle,
+  videoAnalyzeSummary,
+} from "./capture-ai";
 export { fileCompress } from "./file";
 export { wordExtractText } from "./word";
 export { textProcess } from "./text-ai";
@@ -70,7 +75,12 @@ import {
 } from "./image-ai";
 import { videoCompress, videoConvert, videoTrim, videoToGif, videoExtractAudio } from "./video";
 import { audioConvert, audioTrim, audioCompress, audioNormalize } from "./audio";
-import { audioTranscribeText, audioTranscribeSummary, videoAnalyzeSummary } from "./capture-ai";
+import {
+  audioTranscribeText,
+  audioTranscribeSummary,
+  videoTranscribeSubtitle,
+  videoAnalyzeSummary,
+} from "./capture-ai";
 import { fileCompress } from "./file";
 import { wordExtractText } from "./word";
 import { textProcess } from "./text-ai";
@@ -101,7 +111,7 @@ export const allTools: ToolRegistryEntry[] = [
   imageRemoveBackground, imageFaceRestore, imageOutpaint, imageIOPaintStudio,
   videoCompress, videoConvert, videoTrim, videoToGif, videoExtractAudio,
   audioConvert, audioTrim, audioCompress, audioNormalize,
-  audioTranscribeText, audioTranscribeSummary, videoAnalyzeSummary,
+  audioTranscribeText, audioTranscribeSummary, videoTranscribeSubtitle, videoAnalyzeSummary,
   fileCompress,
   wordExtractText,
   textProcess,

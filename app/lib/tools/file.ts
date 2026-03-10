@@ -1,4 +1,4 @@
-﻿// @input: one or more file URLs
+// @input: one or more file URLs
 // @output: zip archive containing the source files
 // @position: generic file compression/archive tool
 

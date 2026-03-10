@@ -830,7 +830,6 @@ impl App {
                 PillState::FileProcessing | PillState::Processing | PillState::ImageProcessing
             )
             || self.action_downloading
-            || self.action_requires_download
     }
 
     fn is_realtime_locked(&self) -> bool {
@@ -1386,6 +1385,16 @@ impl App {
                 .unwrap_or(0)
     }
 
+    fn capture_surface_is_live(&self) -> bool {
+        self.audio_capture_running || self.screen_capture_running
+    }
+
+    fn clear_transient_surface_state(&mut self) {
+        self.output_text.clear();
+        self.processing_label.clear();
+        self.processing_progress = 0.0;
+    }
+
     fn open_audio_notes_surface(&mut self) {
         if self.audio_capture_running {
             self.transition_to(PillState::AudioExpand);
@@ -1424,6 +1433,7 @@ impl App {
                 self.audio_capture_anchor = Some(Instant::now());
                 self.audio_capture_elapsed_ms = 0;
                 self.audio_capture_last_path = None;
+                self.clear_transient_surface_state();
                 self.base_pill_state = PillState::AudioRun;
                 self.transition_to(PillState::AudioExpand);
                 self.bubble =
@@ -1493,6 +1503,7 @@ impl App {
                 self.screen_capture_anchor = Some(Instant::now());
                 self.screen_capture_elapsed_ms = 0;
                 self.screen_capture_last_path = None;
+                self.clear_transient_surface_state();
                 self.base_pill_state = PillState::ScreenRun;
                 self.transition_to(PillState::ScreenExpand);
                 self.bubble =
@@ -3155,6 +3166,7 @@ impl App {
         self.file_input_cursor = 0;
         self.clear_input_file_context();
         self.image_preview_returns_to_file_ready = false;
+        self.clear_transient_surface_state();
         self.transition_to(PillState::FileReady);
     }
 
@@ -3767,6 +3779,280 @@ impl App {
 
     fn clear_input_file_context(&mut self) {
         self.input_file_context_active = false;
+    }
+
+    fn handle_ai_update_event(&mut self, state: AiState, snippet: Option<String>) {
+        if self.capture_surface_is_live() {
+            self.ai_state = state.clone();
+            if let Some(ref t) = snippet {
+                self.snippet_text = t.clone();
+                if matches!(state, AiState::Complete | AiState::Error) {
+                    let rendered = if t.trim().is_empty() {
+                        "Result is ready.".to_string()
+                    } else {
+                        t.clone()
+                    };
+                    self.remember_last_tool_result("ai.output".to_string(), rendered);
+                }
+            }
+            return;
+        }
+
+        if matches!(self.ai_state, AiState::Complete | AiState::Error)
+            && matches!(state, AiState::Thinking | AiState::Streaming)
+        {
+            self.output_text.clear();
+            self.output_viewport.reset();
+        }
+        self.ai_state = state.clone();
+        self.bubble = BubbleState::default();
+        if let Some(ref t) = snippet {
+            self.snippet_text = t.clone();
+        }
+        match state {
+            AiState::Thinking => {
+                self.processing_label = "Understanding task".to_string();
+                self.processing_progress = self.processing_progress.max(0.24);
+                if self.pill_state != PillState::Processing {
+                    self.transition_to(PillState::Processing);
+                }
+            }
+            AiState::Streaming => {
+                if let Some(ref t) = snippet {
+                    self.output_text = t.clone();
+                    self.update_output_viewport_metrics();
+                }
+                if self.output_text.trim().is_empty() {
+                    self.processing_label = "ai.reasoning".to_string();
+                    self.processing_progress = self.processing_progress.max(0.72);
+                    if self.pill_state != PillState::Processing {
+                        self.transition_to(PillState::Processing);
+                    }
+                } else if self.pill_state != PillState::Output {
+                    self.transition_to(PillState::Output);
+                }
+            }
+            AiState::Complete => {
+                if let Some(ref t) = snippet {
+                    self.output_text = t.clone();
+                }
+                if self.output_text.trim().is_empty() {
+                    self.output_text = "Result is ready.".to_string();
+                }
+                self.update_output_viewport_metrics();
+                self.transition_to(PillState::Output);
+            }
+            AiState::Error => {
+                self.output_text = snippet.clone().unwrap_or("Error".to_string());
+                self.update_output_viewport_metrics();
+                self.transition_to(PillState::Output);
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_tool_progress_event(&mut self, name: String, progress: f32, status: ToolStatus) {
+        if self.capture_surface_is_live() {
+            match status {
+                ToolStatus::Complete => {
+                    let done_text = tool_complete_text(&name);
+                    self.remember_last_tool_result(name, done_text);
+                }
+                ToolStatus::Error => {
+                    let failed_text = format!("{name} failed");
+                    self.remember_last_tool_result(name, failed_text.clone());
+                    self.bubble = BubbleState::error(failed_text);
+                }
+                ToolStatus::Running => {}
+            }
+            return;
+        }
+
+        self.processing_label = name;
+        self.processing_progress = progress;
+        let image_flow = is_image_processing_label(&self.processing_label);
+        match status {
+            ToolStatus::Running => {
+                let target = if image_flow {
+                    PillState::ImageProcessing
+                } else {
+                    PillState::Processing
+                };
+                if self.pill_state != target {
+                    self.transition_to(target);
+                }
+            }
+            ToolStatus::Complete => {
+                let done_text = tool_complete_text(&self.processing_label);
+                self.remember_last_tool_result(self.processing_label.clone(), done_text.clone());
+                self.action_text = done_text;
+                self.action_progress = 1.0;
+                self.action_requires_download = false;
+                self.action_downloading = false;
+                self.action_thumbnail = None;
+                self.action_image_aspect_ratio = None;
+                self.action_saved_path = None;
+                self.action_is_image = image_flow;
+                self.action_is_video = false;
+                self.action_detail_text.clear();
+                self.action_editor_url = None;
+                self.image_preview_returns_to_file_ready = false;
+                let target = if self.action_is_image {
+                    PillState::ImageAction
+                } else {
+                    PillState::Action
+                };
+                self.transition_to(target);
+            }
+            ToolStatus::Error => {
+                let failed_text = format!("{} failed", self.processing_label);
+                self.remember_last_tool_result(self.processing_label.clone(), failed_text.clone());
+                self.output_text = failed_text;
+                self.transition_to(PillState::Output);
+            }
+        }
+    }
+
+    fn handle_file_processed_event(
+        &mut self,
+        label: String,
+        file_name: String,
+        download_url: String,
+        aspect_ratio: Option<String>,
+        preview_url: Option<String>,
+        editor_url: Option<String>,
+        detail_text: Option<String>,
+    ) {
+        if label
+            .trim()
+            .eq_ignore_ascii_case("audio.transcribe_text complete")
+        {
+            self.remember_last_tool_result(label.clone(), format!("Transcript ready: {file_name}"));
+            self.prepare_file_ready(download_url);
+            self.bubble = BubbleState::complete("Transcript ready".to_string(), self.frame_count);
+            return;
+        }
+        if label.trim().eq_ignore_ascii_case("text.process complete") {
+            let rendered = fs::read_to_string(&download_url)
+                .ok()
+                .map(|text| text.trim().to_string())
+                .filter(|text| !text.is_empty())
+                .unwrap_or_else(|| format!("Text result ready: {file_name}"));
+            self.remember_last_tool_result(label.clone(), rendered.clone());
+            if self.capture_surface_is_live() {
+                self.bubble = BubbleState::complete(
+                    "Background text result ready".to_string(),
+                    self.frame_count,
+                );
+                return;
+            }
+            self.output_text = rendered;
+            self.transition_to(PillState::Output);
+            return;
+        }
+
+        let capture_report_flow = is_capture_summary_report_label(&label);
+        let image_flow =
+            !capture_report_flow && (is_image_file_name(&file_name) || is_image_processing_label(&label));
+        let video_flow =
+            !capture_report_flow && (is_video_file_name(&file_name) || is_video_processing_label(&label));
+        let studio_flow = label.trim() == "image.iopaint_studio";
+        let capture_report_copy = capture_summary_report_copy(&label);
+        self.action_text = if capture_report_flow {
+            capture_report_copy.0.to_string()
+        } else if studio_flow {
+            "Studio ready".to_string()
+        } else if image_flow {
+            "Image ready".to_string()
+        } else if video_flow {
+            "Video ready".to_string()
+        } else {
+            "File ready".to_string()
+        };
+        let result_summary = if capture_report_flow {
+            capture_report_copy.1.to_string()
+        } else if studio_flow {
+            "Studio source loaded. Tap to preview, then open Studio.".to_string()
+        } else if image_flow {
+            "Image ready. Tap to preview.".to_string()
+        } else if video_flow {
+            "Video ready. Tap download to save.".to_string()
+        } else {
+            "File processed. Tap download to save.".to_string()
+        };
+        self.remember_last_tool_result(label.clone(), result_summary);
+        self.action_progress = 0.0;
+        self.action_file_name = file_name;
+        self.action_download_url = Some(download_url.clone());
+        self.action_requires_download = !studio_flow;
+        self.action_downloading = false;
+        self.action_saved_path = None;
+        self.action_is_image = image_flow;
+        self.action_is_video = video_flow;
+        self.action_detail_text = detail_text.unwrap_or_else(|| {
+            if capture_report_flow {
+                capture_report_copy.2.to_string()
+            } else {
+                String::new()
+            }
+        });
+        self.image_preview_returns_to_file_ready = false;
+        self.action_editor_url = if image_flow {
+            editor_url.or_else(|| {
+                preview_url
+                    .clone()
+                    .or_else(|| Some(download_url.clone()))
+                    .map(|value| build_iopaint_studio_url(&resolve_local_api_url(&value)))
+            })
+        } else {
+            None
+        };
+        self.action_thumbnail = None;
+        self.action_image_aspect_ratio = if self.action_is_image {
+            parse_aspect_ratio_value(aspect_ratio.as_deref())
+        } else {
+            None
+        };
+        if self.action_is_image || self.action_is_video {
+            let thumb_source = preview_url.or_else(|| {
+                if self.action_is_image {
+                    self.action_download_url.clone()
+                } else {
+                    None
+                }
+            });
+            if let Some(url) = thumb_source {
+                self.prefetch_action_thumbnail(url);
+            }
+        }
+        self.dropped_file_path = None;
+        self.dropped_file_paths.clear();
+        self.pending_file_ready = false;
+        self.filedrop_state
+            .transition_to(DropPhase::Idle, self.frame_count);
+
+        if self.capture_surface_is_live() && !capture_report_flow {
+            let label = if studio_flow {
+                "Background Studio source ready"
+            } else if image_flow {
+                "Background image ready"
+            } else if video_flow {
+                "Background video ready"
+            } else {
+                "Background file ready"
+            };
+            self.bubble = BubbleState::complete(label.to_string(), self.frame_count);
+            return;
+        }
+
+        let target = if self.action_is_image {
+            PillState::ImageAction
+        } else if self.action_is_video {
+            PillState::VideoAction
+        } else {
+            PillState::FileAction
+        };
+        self.transition_to(target);
     }
 
     fn submit_input_file_context(&mut self) -> bool {
@@ -4467,51 +4753,7 @@ impl App {
                             continue;
                         }
                     }
-                    self.ai_state = state.clone();
-                    self.bubble = BubbleState::default();
-                    if let Some(ref t) = snippet {
-                        self.snippet_text = t.clone();
-                    }
-                    match state {
-                        AiState::Thinking => {
-                            self.processing_label = "Understanding task".to_string();
-                            self.processing_progress = self.processing_progress.max(0.24);
-                            if self.pill_state != PillState::Processing {
-                                self.transition_to(PillState::Processing);
-                            }
-                        }
-                        AiState::Streaming => {
-                            if let Some(ref t) = snippet {
-                                self.output_text = t.clone();
-                                self.update_output_viewport_metrics();
-                            }
-                            if self.output_text.trim().is_empty() {
-                                self.processing_label = "ai.reasoning".to_string();
-                                self.processing_progress = self.processing_progress.max(0.72);
-                                if self.pill_state != PillState::Processing {
-                                    self.transition_to(PillState::Processing);
-                                }
-                            } else if self.pill_state != PillState::Output {
-                                self.transition_to(PillState::Output);
-                            }
-                        }
-                        AiState::Complete => {
-                            if let Some(ref t) = snippet {
-                                self.output_text = t.clone();
-                            }
-                            if self.output_text.trim().is_empty() {
-                                self.output_text = "Result is ready.".to_string();
-                            }
-                            self.update_output_viewport_metrics();
-                            self.transition_to(PillState::Output);
-                        }
-                        AiState::Error => {
-                            self.output_text = snippet.clone().unwrap_or("Error".to_string());
-                            self.update_output_viewport_metrics();
-                            self.transition_to(PillState::Output);
-                        }
-                        _ => {}
-                    }
+                    self.handle_ai_update_event(state.clone(), snippet.clone());
                 }
                 Command::ShowNotification {
                     title,
@@ -4526,55 +4768,7 @@ impl App {
                     progress,
                     status,
                 } => {
-                    self.processing_label = name;
-                    self.processing_progress = progress;
-                    let image_flow = is_image_processing_label(&self.processing_label);
-                    match status {
-                        ToolStatus::Running => {
-                            let target = if image_flow {
-                                PillState::ImageProcessing
-                            } else {
-                                PillState::Processing
-                            };
-                            if self.pill_state != target {
-                                self.transition_to(target);
-                            }
-                        }
-                        ToolStatus::Complete => {
-                            let done_text = tool_complete_text(&self.processing_label);
-                            self.remember_last_tool_result(
-                                self.processing_label.clone(),
-                                done_text.clone(),
-                            );
-                            self.action_text = done_text;
-                            self.action_progress = 1.0;
-                            self.action_requires_download = false;
-                            self.action_downloading = false;
-                            self.action_thumbnail = None;
-                            self.action_image_aspect_ratio = None;
-                            self.action_saved_path = None;
-                            self.action_is_image = image_flow;
-                            self.action_is_video = false;
-                            self.action_detail_text.clear();
-                            self.action_editor_url = None;
-                            self.image_preview_returns_to_file_ready = false;
-                            let target = if self.action_is_image {
-                                PillState::ImageAction
-                            } else {
-                                PillState::Action
-                            };
-                            self.transition_to(target);
-                        }
-                        ToolStatus::Error => {
-                            let failed_text = format!("{} failed", self.processing_label);
-                            self.remember_last_tool_result(
-                                self.processing_label.clone(),
-                                failed_text.clone(),
-                            );
-                            self.output_text = failed_text;
-                            self.transition_to(PillState::Output);
-                        }
-                    }
+                    self.handle_tool_progress_event(name, progress, status);
                 }
                 Command::FileProcessed {
                     label,
@@ -4585,129 +4779,26 @@ impl App {
                     editor_url,
                     detail_text,
                 } => {
-                    if label
-                        .trim()
-                        .eq_ignore_ascii_case("audio.transcribe_text complete")
-                    {
-                        self.remember_last_tool_result(
-                            label.clone(),
-                            format!("Transcript ready: {file_name}"),
-                        );
-                        self.prepare_file_ready(download_url);
-                        self.bubble = BubbleState::complete(
-                            "Transcript ready".to_string(),
-                            self.frame_count,
-                        );
-                        window.request_redraw();
-                        continue;
-                    }
-                    if label.trim().eq_ignore_ascii_case("text.process complete") {
-                        let rendered = fs::read_to_string(&download_url)
-                            .ok()
-                            .map(|text| text.trim().to_string())
-                            .filter(|text| !text.is_empty())
-                            .unwrap_or_else(|| format!("Text result ready: {file_name}"));
-                        self.remember_last_tool_result(label.clone(), rendered.clone());
-                        self.output_text = rendered;
-                        self.transition_to(PillState::Output);
-                        window.request_redraw();
-                        continue;
-                    }
-                    let capture_report_flow = is_capture_summary_report_label(&label);
-                    let image_flow = !capture_report_flow
-                        && (is_image_file_name(&file_name) || is_image_processing_label(&label));
-                    let video_flow = !capture_report_flow
-                        && (is_video_file_name(&file_name) || is_video_processing_label(&label));
-                    let studio_flow = label.trim() == "image.iopaint_studio";
-                    let capture_report_copy = capture_summary_report_copy(&label);
-                    self.action_text = if capture_report_flow {
-                        capture_report_copy.0.to_string()
-                    } else if studio_flow {
-                        "Studio ready".to_string()
-                    } else if image_flow {
-                        "Image ready".to_string()
-                    } else if video_flow {
-                        "Video ready".to_string()
-                    } else {
-                        "File ready".to_string()
-                    };
-                    let result_summary = if capture_report_flow {
-                        capture_report_copy.1.to_string()
-                    } else if studio_flow {
-                        "Studio source loaded. Tap to preview, then open Studio.".to_string()
-                    } else if image_flow {
-                        "Image ready. Tap to preview.".to_string()
-                    } else if video_flow {
-                        "Video ready. Tap download to save.".to_string()
-                    } else {
-                        "File processed. Tap download to save.".to_string()
-                    };
-                    self.remember_last_tool_result(label.clone(), result_summary);
-                    self.action_progress = 0.0;
-                    self.action_file_name = file_name;
-                    self.action_download_url = Some(download_url.clone());
-                    self.action_requires_download = !studio_flow;
-                    self.action_downloading = false;
-                    self.action_saved_path = None;
-                    self.action_is_image = image_flow;
-                    self.action_is_video = video_flow;
-                    self.action_detail_text = detail_text.unwrap_or_else(|| {
-                        if capture_report_flow {
-                            capture_report_copy.2.to_string()
-                        } else {
-                            String::new()
-                        }
-                    });
-                    self.image_preview_returns_to_file_ready = false;
-                    self.action_editor_url = if image_flow {
-                        editor_url.or_else(|| {
-                            preview_url
-                                .clone()
-                                .or_else(|| Some(download_url.clone()))
-                                .map(|value| {
-                                    build_iopaint_studio_url(&resolve_local_api_url(&value))
-                                })
-                        })
-                    } else {
-                        None
-                    };
-                    self.action_thumbnail = None;
-                    self.action_image_aspect_ratio = if self.action_is_image {
-                        parse_aspect_ratio_value(aspect_ratio.as_deref())
-                    } else {
-                        None
-                    };
-                    if self.action_is_image || self.action_is_video {
-                        let thumb_source = preview_url.or_else(|| {
-                            if self.action_is_image {
-                                self.action_download_url.clone()
-                            } else {
-                                None
-                            }
-                        });
-                        if let Some(url) = thumb_source {
-                            self.prefetch_action_thumbnail(url);
-                        }
-                    }
-                    self.dropped_file_path = None;
-                    self.dropped_file_paths.clear();
-                    self.pending_file_ready = false;
-                    self.filedrop_state
-                        .transition_to(DropPhase::Idle, self.frame_count);
-                    let target = if self.action_is_image {
-                        PillState::ImageAction
-                    } else if self.action_is_video {
-                        PillState::VideoAction
-                    } else {
-                        PillState::FileAction
-                    };
-                    self.transition_to(target);
+                    self.handle_file_processed_event(
+                        label,
+                        file_name,
+                        download_url,
+                        aspect_ratio,
+                        preview_url,
+                        editor_url,
+                        detail_text,
+                    );
                 }
                 Command::FileProcessFailed { message } => {
                     self.remember_last_tool_result(
                         "file.tool".to_string(),
                         format!("Failed: {message}"),
                     );
+                    if self.capture_surface_is_live() {
+                        self.bubble = BubbleState::error(message);
+                        window.request_redraw();
+                        continue;
+                    }
                     self.output_text = message;
                     self.action_download_url = None;
                     self.action_requires_download = false;
@@ -7471,6 +7562,27 @@ mod tests {
     }
 
     #[test]
+    fn result_download_affordance_does_not_block_outside_collapse() {
+        let mut app = App::default();
+        app.pill_state = PillState::ImagePreview;
+        app.base_pill_state = PillState::Idle;
+        app.action_requires_download = true;
+
+        assert!(!app.is_tool_busy());
+        assert!(!app.is_realtime_locked());
+    }
+
+    #[test]
+    fn active_download_still_counts_as_busy_for_realtime_lock() {
+        let mut app = App::default();
+        app.pill_state = PillState::ImageAction;
+        app.action_downloading = true;
+
+        assert!(app.is_tool_busy());
+        assert!(app.is_realtime_locked());
+    }
+
+    #[test]
     fn open_stack_music_reuses_recent_results_before_new_search() {
         let mut app = App::default();
         app.music_netease_connection_known = true;
@@ -7531,6 +7643,79 @@ mod tests {
                 "Markdown screen report. Download to keep."
             )
         );
+    }
+
+    #[test]
+    fn prepare_file_ready_clears_stale_output_and_processing_state() {
+        let mut app = App::default();
+        app.output_text = "Old output".to_string();
+        app.processing_label = "generate.image".to_string();
+        app.processing_progress = 0.58;
+
+        app.prepare_file_ready("C:/tmp/sample.png".to_string());
+
+        assert_eq!(app.pill_state, PillState::FileReady);
+        assert!(app.output_text.is_empty());
+        assert!(app.processing_label.is_empty());
+        assert_eq!(app.processing_progress, 0.0);
+    }
+
+    #[test]
+    fn ai_update_during_screen_capture_does_not_interrupt_live_surface() {
+        let mut app = App::default();
+        app.screen_capture_running = true;
+        app.transition_to(PillState::ScreenExpand);
+
+        app.handle_ai_update_event(
+            AiState::Complete,
+            Some("Background summary ready".to_string()),
+        );
+
+        assert_eq!(app.pill_state, PillState::ScreenExpand);
+        assert_eq!(app.last_tool_result, "Background summary ready");
+    }
+
+    #[test]
+    fn tool_progress_during_screen_capture_is_ignored_for_surface_state() {
+        let mut app = App::default();
+        app.screen_capture_running = true;
+        app.transition_to(PillState::ScreenExpand);
+
+        app.handle_tool_progress_event(
+            "generate.image".to_string(),
+            0.58,
+            ToolStatus::Running,
+        );
+
+        assert_eq!(app.pill_state, PillState::ScreenExpand);
+        assert!(app.processing_label.is_empty());
+        assert_eq!(app.processing_progress, 0.0);
+    }
+
+    #[test]
+    fn file_processed_during_screen_capture_keeps_recording_surface_active() {
+        let mut app = App::default();
+        app.screen_capture_running = true;
+        app.transition_to(PillState::ScreenExpand);
+
+        app.handle_file_processed_event(
+            "generate.image complete".to_string(),
+            "sample-omni.png".to_string(),
+            "http://127.0.0.1:3010/api/v1/files/demo".to_string(),
+            Some("1:1".to_string()),
+            Some("http://127.0.0.1:3010/api/v1/files/demo".to_string()),
+            None,
+            None,
+        );
+
+        assert_eq!(app.pill_state, PillState::ScreenExpand);
+        assert_eq!(app.action_text, "Image ready");
+        assert!(app.action_is_image);
+        assert_eq!(
+            app.action_download_url.as_deref(),
+            Some("http://127.0.0.1:3010/api/v1/files/demo")
+        );
+        assert_eq!(app.last_tool_result, "Image ready. Tap to preview.");
     }
 }
 

@@ -7,6 +7,7 @@
 import { ApiKeyCard } from "@/components/dashboard/api-key-card";
 import { AccountSection } from "@/components/dashboard/account-section";
 import { DangerZone } from "@/components/dashboard/danger-zone";
+import { WorkspaceSection } from "@/components/dashboard/workspace-section";
 import { useT } from "@/lib/i18n";
 
 export default function SettingsPage() {
@@ -23,6 +24,7 @@ export default function SettingsPage() {
       <div className="flex flex-col gap-4">
         <ApiKeyCard />
         <AccountSection />
+        <WorkspaceSection />
         <DangerZone />
       </div>
     </div>

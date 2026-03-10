@@ -1,4 +1,4 @@
-﻿// @input: Tool result with output_url or output_file_url
+// @input: Tool result with output_url or output_file_url
 // @output: File download card with icon and metadata
 // @position: A2UI widget for PDF and other file-output tools
 

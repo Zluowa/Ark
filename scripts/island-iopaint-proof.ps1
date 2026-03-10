@@ -1,4 +1,4 @@
-﻿param(
+param(
   [string]$OutDir = "D:\Moss\projects\omniagent-new\desktop\test-screenshots\2026-03-07-island-iopaint-proof",
   [string]$ImagePath = "D:\Moss\projects\omniagent-new\app\test-screenshots\2026-03-07-iopaint-integration-proof\00-source-watermark.png",
   [string]$Instruction = "remove the watermark cleanly and preserve the original design",
