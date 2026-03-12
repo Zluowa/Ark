@@ -1,15 +1,35 @@
-// @input: Video URLs from Bilibili, Douyin, YouTube, Xiaohongshu
+﻿// @input: Video URLs from Bilibili, Douyin, YouTube, Xiaohongshu
 // @output: ToolRegistryEntry objects for 4 media tools (info/video/audio/subtitle)
 // @position: Multi-platform media download via public APIs + ffmpeg + server-side proxy
 
-import { createWriteStream, existsSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  createWriteStream,
+  existsSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { ToolHandler, ToolManifest, ToolRegistryEntry } from "@/lib/engine/types";
+import type {
+  ToolHandler,
+  ToolManifest,
+  ToolRegistryEntry,
+} from "@/lib/engine/types";
 import { LONG_TIMEOUT_MS } from "@/lib/engine/types";
 import { getServerEnv } from "@/lib/server/env";
+import {
+  getMediaProviderConfig,
+  type MediaOperation,
+  type MediaProviderName,
+  type VidBeeRuntimeSettings,
+} from "@/lib/server/media-provider-config";
+import {
+  VidBeeClient,
+  type VidBeeVideoFormat,
+  type VidBeeVideoInfo,
+} from "@/lib/server/vidbee-client";
 import {
   buildSubtitleTexts,
   normalizeAudioForAsr,
@@ -17,7 +37,7 @@ import {
 } from "./capture-ai";
 import { proxyFetch, proxyStreamToFile, tempFile, runCommand } from "./helpers";
 
-/* ── Shared types ── */
+/* 鈹€鈹€ Shared types 鈹€鈹€ */
 
 interface VideoInfo {
   title: string;
@@ -26,11 +46,22 @@ interface VideoInfo {
   uploader: string;
   platform: string;
   view_count: number;
-  formats: Array<{ format_id: string; ext: string; resolution: string; note: string }>;
+  formats: Array<{
+    format_id: string;
+    ext: string;
+    resolution: string;
+    note: string;
+    filesize_approx?: number;
+  }>;
   subtitles_available?: Array<{ lan: string; lan_doc: string }>;
 }
 
-interface SubtitleEntry { index: number; start: string; end: string; text: string }
+interface SubtitleEntry {
+  index: number;
+  start: string;
+  end: string;
+  text: string;
+}
 
 type SubtitleBundle = {
   title: string;
@@ -48,13 +79,23 @@ type SubtitleBundle = {
 const MEDIA_FETCH_TIMEOUT_MS = 30_000;
 const MEDIA_SUBTITLE_FETCH_TIMEOUT_MS = 45_000;
 const MEDIA_PROXY_ENABLED = Boolean(
-  (process.env.MEDIA_PROXY || process.env.HTTPS_PROXY || process.env.HTTP_PROXY || "").trim(),
+  (
+    process.env.MEDIA_PROXY ||
+    process.env.HTTPS_PROXY ||
+    process.env.HTTP_PROXY ||
+    ""
+  ).trim(),
 );
 
-/* ── Shared utilities ── */
+/* 鈹€鈹€ Shared utilities 鈹€鈹€ */
 
 function tryUnlink(...paths: string[]): void {
-  for (const p of paths) try { unlinkSync(p); } catch { /* ok */ }
+  for (const p of paths)
+    try {
+      unlinkSync(p);
+    } catch {
+      /* ok */
+    }
 }
 
 function formatDuration(secs: number): string {
@@ -80,7 +121,10 @@ function srtToVttTimestamp(value: string): string {
 
 function entriesToSrt(entries: SubtitleEntry[]): string {
   return entries
-    .map((entry) => `${entry.index}\n${entry.start} --> ${entry.end}\n${entry.text}`)
+    .map(
+      (entry) =>
+        `${entry.index}\n${entry.start} --> ${entry.end}\n${entry.text}`,
+    )
     .join("\n\n");
 }
 
@@ -123,7 +167,10 @@ function parseSrtEntries(source: string): SubtitleEntry[] {
     const maybeIndex = Number(lines[0]);
     const timeLineIndex = Number.isFinite(maybeIndex) ? 1 : 0;
     const timeLine = lines[timeLineIndex];
-    const text = lines.slice(timeLineIndex + 1).join(" ").trim();
+    const text = lines
+      .slice(timeLineIndex + 1)
+      .join(" ")
+      .trim();
     const match = timeLine.match(
       /(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})(?:\s+.*)?$/,
     );
@@ -148,7 +195,9 @@ function parseVttEntries(source: string): SubtitleEntry[] {
       index += 1;
       continue;
     }
-    const timingLine = line.includes("-->") ? line : lines[index + 1]?.trim() || "";
+    const timingLine = line.includes("-->")
+      ? line
+      : lines[index + 1]?.trim() || "";
     const textStartIndex = line.includes("-->") ? index + 1 : index + 2;
     const match = timingLine.match(
       /(\d{2}:\d{2}:\d{2}\.\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}\.\d{3})(?:\s+.*)?$/,
@@ -164,7 +213,10 @@ function parseVttEntries(source: string): SubtitleEntry[] {
       cursor += 1;
     }
     const text = decodeHtmlEntities(
-      textLines.join(" ").replace(/<[^>]+>/g, "").trim(),
+      textLines
+        .join(" ")
+        .replace(/<[^>]+>/g, "")
+        .trim(),
     );
     if (text) {
       entries.push({
@@ -198,9 +250,17 @@ function pickPreferredLanguage<T>(
       let score = 0;
       if (!raw) score = 1;
       else if (normalized === raw) score = 100;
-      else if (normalized.startsWith(`${raw}-`) || normalized.startsWith(`${raw}_`))
+      else if (
+        normalized.startsWith(`${raw}-`) ||
+        normalized.startsWith(`${raw}_`)
+      )
         score = 90;
-      else if (base && (normalized === base || normalized.startsWith(`${base}-`) || normalized.startsWith(`${base}_`)))
+      else if (
+        base &&
+        (normalized === base ||
+          normalized.startsWith(`${base}-`) ||
+          normalized.startsWith(`${base}_`))
+      )
         score = 80;
       else if (raw && normalized.includes(raw)) score = 70;
       else if (base && normalized.includes(base)) score = 60;
@@ -213,7 +273,12 @@ function pickPreferredLanguage<T>(
 
 function sanitizeArtifactBasename(value: string, fallback: string): string {
   const stem = value.replace(/\.[^.]+$/, "");
-  const safe = stem.replace(/[<>:"/\\|?*\u0000-\u001f]+/g, "-").trim();
+  const withoutReserved = stem.replace(/[<>:"/\\|?*]+/g, "-");
+  const safe = Array.from(withoutReserved, (char) =>
+    char.charCodeAt(0) < 32 ? "-" : char,
+  )
+    .join("")
+    .trim();
   return safe || fallback;
 }
 
@@ -310,7 +375,10 @@ function createZipBundle(
   endRecord.writeUInt32LE(offset, 16);
   endRecord.writeUInt16LE(0, 20);
 
-  writeFileSync(zipPath, Buffer.concat([...localParts, centralDirectory, endRecord]));
+  writeFileSync(
+    zipPath,
+    Buffer.concat([...localParts, centralDirectory, endRecord]),
+  );
   return { path: zipPath, fileName: zipName };
 }
 
@@ -344,14 +412,21 @@ function buildSubtitleBundle(
   };
 }
 
-async function streamToFile(url: string, dest: string, headers: Record<string, string>): Promise<void> {
+async function streamToFile(
+  url: string,
+  dest: string,
+  headers: Record<string, string>,
+): Promise<void> {
   try {
     const res = await fetch(url, {
       headers,
       signal: AbortSignal.timeout(MEDIA_FETCH_TIMEOUT_MS),
     });
-    if (!res.ok) throw new Error(`下载流失败: ${res.status}`);
-    await pipeline(Readable.fromWeb(res.body as never), createWriteStream(dest));
+    if (!res.ok) throw new Error(`涓嬭浇娴佸け璐? ${res.status}`);
+    await pipeline(
+      Readable.fromWeb(res.body as never),
+      createWriteStream(dest),
+    );
   } catch (error) {
     if (!MEDIA_PROXY_ENABLED || !/^https:\/\//i.test(url)) {
       throw error;
@@ -386,13 +461,13 @@ async function fetchTextWithOptionalProxy(
   }
 }
 
-/* ══════════════════════════════════════════════════════════
-   Bilibili — Public API (no login: max 480p DASH)
-   ══════════════════════════════════════════════════════════ */
+/* 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+   Bilibili 鈥?Public API (no login: max 480p DASH)
+   鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲 */
 
 const BILI_H = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-  "Referer": "https://www.bilibili.com",
+  Referer: "https://www.bilibili.com",
 };
 
 async function biliGet(url: string): Promise<Record<string, unknown>> {
@@ -401,8 +476,9 @@ async function biliGet(url: string): Promise<Record<string, unknown>> {
     signal: AbortSignal.timeout(MEDIA_FETCH_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`Bilibili API ${res.status}`);
-  const json = await res.json() as Record<string, unknown>;
-  if (json.code !== 0) throw new Error(`Bilibili ${json.code}: ${json.message}`);
+  const json = (await res.json()) as Record<string, unknown>;
+  if (json.code !== 0)
+    throw new Error(`Bilibili ${json.code}: ${json.message}`);
   return json.data as Record<string, unknown>;
 }
 
@@ -417,17 +493,24 @@ async function parseBvid(url: string): Promise<string> {
   }
   const bv = n.match(/\/video\/(BV[a-zA-Z0-9]+)/);
   if (bv) return bv[1];
-  throw new Error("无法识别的B站链接，请提供 bilibili.com/video/BVxxx 格式");
+  throw new Error(
+    "鏃犳硶璇嗗埆鐨凚绔欓摼鎺ワ紝璇锋彁渚?bilibili.com/video/BVxxx 鏍煎紡",
+  );
 }
 
 async function biliInfo(url: string): Promise<VideoInfo> {
   const bvid = await parseBvid(url);
-  const d = await biliGet(`https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`);
+  const d = await biliGet(
+    `https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`,
+  );
   const owner = d.owner as Record<string, unknown>;
   const stat = d.stat as Record<string, unknown>;
 
-  const subData = await biliGet(`https://api.bilibili.com/x/player/v2?bvid=${bvid}&cid=${(d.pages as Array<Record<string, unknown>>)[0].cid}`);
-  const subs = ((subData.subtitle as Record<string, unknown>)?.subtitles ?? []) as Array<Record<string, unknown>>;
+  const subData = await biliGet(
+    `https://api.bilibili.com/x/player/v2?bvid=${bvid}&cid=${(d.pages as Array<Record<string, unknown>>)[0].cid}`,
+  );
+  const subs = ((subData.subtitle as Record<string, unknown>)?.subtitles ??
+    []) as Array<Record<string, unknown>>;
 
   return {
     title: d.title as string,
@@ -436,69 +519,130 @@ async function biliInfo(url: string): Promise<VideoInfo> {
     uploader: owner.name as string,
     platform: "bilibili",
     view_count: stat.view as number,
-    formats: [{ format_id: "dash-480p", ext: "mp4", resolution: "854x480", note: "无登录最高480p" }],
-    subtitles_available: subs.map((s) => ({ lan: s.lan as string, lan_doc: s.lan_doc as string })),
+    formats: [
+      {
+        format_id: "dash-480p",
+        ext: "mp4",
+        resolution: "854x480",
+        note: "鏃犵櫥褰曟渶楂?80p",
+      },
+    ],
+    subtitles_available: subs.map((s) => ({
+      lan: s.lan as string,
+      lan_doc: s.lan_doc as string,
+    })),
   };
 }
 
-async function biliDownloadVideo(url: string): Promise<{ path: string; title: string; duration: number }> {
+async function biliDownloadVideo(
+  url: string,
+): Promise<{ path: string; title: string; duration: number }> {
   const bvid = await parseBvid(url);
-  const d = await biliGet(`https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`);
+  const d = await biliGet(
+    `https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`,
+  );
   const cid = (d.pages as Array<Record<string, unknown>>)[0].cid as number;
-  const play = await biliGet(`https://api.bilibili.com/x/player/playurl?bvid=${bvid}&cid=${cid}&qn=80&fnval=16`);
+  const play = await biliGet(
+    `https://api.bilibili.com/x/player/playurl?bvid=${bvid}&cid=${cid}&qn=80&fnval=16`,
+  );
   const dash = play.dash as Record<string, unknown>;
   const videos = dash.video as Array<Record<string, unknown>>;
   const audios = dash.audio as Array<Record<string, unknown>>;
-  if (!videos?.length || !audios?.length) throw new Error("无法获取视频流");
+  if (!videos?.length || !audios?.length)
+    throw new Error("Unable to retrieve Bilibili video streams.");
 
-  const vTmp = tempFile("m4s"), aTmp = tempFile("m4s"), out = tempFile("mp4");
+  const vTmp = tempFile("m4s"),
+    aTmp = tempFile("m4s"),
+    out = tempFile("mp4");
   try {
     await Promise.all([
       streamToFile(videos[0].baseUrl as string, vTmp, BILI_H),
       streamToFile(audios[0].baseUrl as string, aTmp, BILI_H),
     ]);
-    const r = await runCommand("ffmpeg", ["-y", "-i", vTmp, "-i", aTmp, "-c", "copy", out], 300_000);
-    if (r.exitCode !== 0) throw new Error(`ffmpeg合并失败: ${r.stderr.slice(0, 200)}`);
-    return { path: out, title: d.title as string, duration: d.duration as number };
+    const r = await runCommand(
+      "ffmpeg",
+      ["-y", "-i", vTmp, "-i", aTmp, "-c", "copy", out],
+      300_000,
+    );
+    if (r.exitCode !== 0)
+      throw new Error(`ffmpeg鍚堝苟澶辫触: ${r.stderr.slice(0, 200)}`);
+    return {
+      path: out,
+      title: d.title as string,
+      duration: d.duration as number,
+    };
   } finally {
     tryUnlink(vTmp, aTmp);
   }
 }
 
-async function biliDownloadAudio(url: string): Promise<{ path: string; title: string; duration: number }> {
+async function biliDownloadAudio(
+  url: string,
+): Promise<{ path: string; title: string; duration: number }> {
   const bvid = await parseBvid(url);
-  const d = await biliGet(`https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`);
+  const d = await biliGet(
+    `https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`,
+  );
   const cid = (d.pages as Array<Record<string, unknown>>)[0].cid as number;
-  const play = await biliGet(`https://api.bilibili.com/x/player/playurl?bvid=${bvid}&cid=${cid}&qn=80&fnval=16`);
-  const audios = (play.dash as Record<string, unknown>).audio as Array<Record<string, unknown>>;
-  if (!audios?.length) throw new Error("无法获取音频流");
+  const play = await biliGet(
+    `https://api.bilibili.com/x/player/playurl?bvid=${bvid}&cid=${cid}&qn=80&fnval=16`,
+  );
+  const audios = (play.dash as Record<string, unknown>).audio as Array<
+    Record<string, unknown>
+  >;
+  if (!audios?.length)
+    throw new Error("Unable to retrieve Bilibili audio stream.");
 
-  const aTmp = tempFile("m4s"), out = tempFile("mp3");
+  const aTmp = tempFile("m4s"),
+    out = tempFile("mp3");
   try {
     await streamToFile(audios[0].baseUrl as string, aTmp, BILI_H);
-    const r = await runCommand("ffmpeg", ["-y", "-i", aTmp, "-c:a", "libmp3lame", "-q:a", "0", out], 300_000);
-    if (r.exitCode !== 0) throw new Error(`ffmpeg失败: ${r.stderr.slice(0, 200)}`);
-    return { path: out, title: d.title as string, duration: d.duration as number };
+    const r = await runCommand(
+      "ffmpeg",
+      ["-y", "-i", aTmp, "-c:a", "libmp3lame", "-q:a", "0", out],
+      300_000,
+    );
+    if (r.exitCode !== 0)
+      throw new Error(`ffmpeg澶辫触: ${r.stderr.slice(0, 200)}`);
+    return {
+      path: out,
+      title: d.title as string,
+      duration: d.duration as number,
+    };
   } finally {
     tryUnlink(aTmp);
   }
 }
 
-async function biliSubtitles(url: string, lang: string): Promise<{ title: string; language: string; entries: SubtitleEntry[] }> {
+async function biliSubtitles(
+  url: string,
+  lang: string,
+): Promise<{ title: string; language: string; entries: SubtitleEntry[] }> {
   const bvid = await parseBvid(url);
-  const d = await biliGet(`https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`);
+  const d = await biliGet(
+    `https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`,
+  );
   const cid = (d.pages as Array<Record<string, unknown>>)[0].cid as number;
-  const sub = await biliGet(`https://api.bilibili.com/x/player/v2?bvid=${bvid}&cid=${cid}`);
-  const subs = ((sub.subtitle as Record<string, unknown>)?.subtitles ?? []) as Array<Record<string, unknown>>;
-  if (!subs.length) throw new Error("该视频没有可用字幕");
+  const sub = await biliGet(
+    `https://api.bilibili.com/x/player/v2?bvid=${bvid}&cid=${cid}`,
+  );
+  const subs = ((sub.subtitle as Record<string, unknown>)?.subtitles ??
+    []) as Array<Record<string, unknown>>;
+  if (!subs.length)
+    throw new Error(
+      "No official subtitles are available for this Bilibili video.",
+    );
 
-  const picked = subs.find((s) => (s.lan as string).startsWith(lang)) ?? subs[0];
+  const picked =
+    subs.find((s) => (s.lan as string).startsWith(lang)) ?? subs[0];
   const res = await fetch(`https:${picked.subtitle_url}`, {
     headers: BILI_H,
     signal: AbortSignal.timeout(MEDIA_SUBTITLE_FETCH_TIMEOUT_MS),
   });
-  if (!res.ok) throw new Error(`下载字幕失败: ${res.status}`);
-  const raw = await res.json() as { body: Array<{ from: number; to: number; content: string }> };
+  if (!res.ok) throw new Error(`Failed to download subtitles: ${res.status}`);
+  const raw = (await res.json()) as {
+    body: Array<{ from: number; to: number; content: string }>;
+  };
 
   return {
     title: d.title as string,
@@ -512,17 +656,19 @@ async function biliSubtitles(url: string, lang: string): Promise<{ title: string
   };
 }
 
-/* ══════════════════════════════════════════════════════════
-   Douyin — iesdouyin SSR share page (720p, watermark)
-   ══════════════════════════════════════════════════════════ */
+/* 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+   Douyin 鈥?iesdouyin SSR share page (720p, watermark)
+   鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲 */
 
-const DY_H = { "User-Agent": "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36" };
+const DY_H = {
+  "User-Agent": "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36",
+};
 
 function parseDouyinId(url: string): string {
   const n = url.startsWith("http") ? url : `https://${url}`;
   const m = n.match(/video\/(\d+)/);
   if (m) return m[1];
-  throw new Error("无法识别的抖音链接，请提供 douyin.com/video/{ID} 格式");
+  throw new Error("Unable to parse the Douyin URL. Use douyin.com/video/{ID}.");
 }
 
 type DouyinItem = {
@@ -539,18 +685,20 @@ type DouyinItem = {
 };
 
 async function douyinFetchItem(awemeId: string): Promise<DouyinItem> {
-  const res = await fetch(`https://www.iesdouyin.com/share/video/${awemeId}/`, { headers: DY_H });
-  if (!res.ok) throw new Error(`抖音页面请求失败: ${res.status}`);
+  const res = await fetch(`https://www.iesdouyin.com/share/video/${awemeId}/`, {
+    headers: DY_H,
+  });
+  if (!res.ok) throw new Error(`Douyin page request failed: ${res.status}`);
   const html = await res.text();
   const match = html.match(/window\._ROUTER_DATA\s*=\s*([\s\S]*?)<\/script>/);
-  if (!match) throw new Error("无法解析抖音页面数据");
+  if (!match) throw new Error("Unable to parse the Douyin page payload.");
   const data = JSON.parse(match[1].trim());
   const page = data.loaderData?.["video_(id)/page"];
   const items = page?.videoInfoRes?.item_list as DouyinItem[] | undefined;
   if (!items?.length) {
     const filter = page?.videoInfoRes?.filter_list;
-    const reason = filter?.[0]?.filter_reason ?? "未知原因";
-    throw new Error(`抖音视频不可用: ${reason}`);
+    const reason = filter?.[0]?.filter_reason ?? "鏈煡鍘熷洜";
+    throw new Error(`Douyin video is not available: ${reason}`);
   }
   return items[0];
 }
@@ -564,52 +712,75 @@ async function douyinInfo(url: string): Promise<VideoInfo> {
     uploader: item.author.nickname,
     platform: "douyin",
     view_count: item.statistics.digg_count,
-    formats: [{
-      format_id: "mp4-720p",
-      ext: "mp4",
-      resolution: `${item.video.width}x${item.video.height}`,
-      note: "720p 有水印",
-    }],
+    formats: [
+      {
+        format_id: "mp4-720p",
+        ext: "mp4",
+        resolution: `${item.video.width}x${item.video.height}`,
+        note: "720p watermarked",
+      },
+    ],
   };
 }
 
-async function douyinDownloadVideo(url: string): Promise<{ path: string; title: string; duration: number }> {
+async function douyinDownloadVideo(
+  url: string,
+): Promise<{ path: string; title: string; duration: number }> {
   const item = await douyinFetchItem(parseDouyinId(url));
   const videoUrl = item.video.play_addr.url_list[0];
-  if (!videoUrl) throw new Error("无法获取抖音视频下载地址");
+  if (!videoUrl) throw new Error("鏃犳硶鑾峰彇鎶栭煶瑙嗛涓嬭浇鍦板潃");
   const out = tempFile("mp4");
   await streamToFile(videoUrl, out, DY_H);
-  return { path: out, title: item.desc, duration: Math.round(item.video.duration / 1000) };
+  return {
+    path: out,
+    title: item.desc,
+    duration: Math.round(item.video.duration / 1000),
+  };
 }
 
-async function douyinDownloadAudio(url: string): Promise<{ path: string; title: string; duration: number }> {
+async function douyinDownloadAudio(
+  url: string,
+): Promise<{ path: string; title: string; duration: number }> {
   const item = await douyinFetchItem(parseDouyinId(url));
   const videoUrl = item.video.play_addr.url_list[0];
-  if (!videoUrl) throw new Error("无法获取抖音视频下载地址");
-  const vTmp = tempFile("mp4"), out = tempFile("mp3");
+  if (!videoUrl) throw new Error("鏃犳硶鑾峰彇鎶栭煶瑙嗛涓嬭浇鍦板潃");
+  const vTmp = tempFile("mp4"),
+    out = tempFile("mp3");
   try {
     await streamToFile(videoUrl, vTmp, DY_H);
-    const r = await runCommand("ffmpeg", ["-y", "-i", vTmp, "-vn", "-c:a", "libmp3lame", "-q:a", "0", out], 300_000);
-    if (r.exitCode !== 0) throw new Error(`ffmpeg失败: ${r.stderr.slice(0, 200)}`);
-    return { path: out, title: item.desc, duration: Math.round(item.video.duration / 1000) };
+    const r = await runCommand(
+      "ffmpeg",
+      ["-y", "-i", vTmp, "-vn", "-c:a", "libmp3lame", "-q:a", "0", out],
+      300_000,
+    );
+    if (r.exitCode !== 0)
+      throw new Error(`ffmpeg澶辫触: ${r.stderr.slice(0, 200)}`);
+    return {
+      path: out,
+      title: item.desc,
+      duration: Math.round(item.video.duration / 1000),
+    };
   } finally {
     tryUnlink(vTmp);
   }
 }
 
-/* ══════════════════════════════════════════════════════════
-   YouTube — yt-dlp + 服务端代理 + cookie认证
-   需要: yt-dlp + ffmpeg, MEDIA_PROXY/HTTPS_PROXY 配置代理
-   认证: .omniagent-state/youtube-cookies.txt (一次性设置)
-   ══════════════════════════════════════════════════════════ */
+/* 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+   YouTube 鈥?yt-dlp + 鏈嶅姟绔唬鐞?+ cookie璁よ瘉
+   闇€瑕? yt-dlp + ffmpeg, MEDIA_PROXY/HTTPS_PROXY 閰嶇疆浠ｇ悊
+   璁よ瘉: .omniagent-state/youtube-cookies.txt (涓€娆℃€ц缃?
+   鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲 */
 
 const YT_COOKIES_PATH = `${process.env.OMNIAGENT_LOCAL_STATE_DIR?.trim() || `${process.cwd()}/.omniagent-state`}/youtube-cookies.txt`;
-const YT_AUTH_MSG = "YouTube需要登录认证。请前往 设置 → 连接 授权YouTube账号，或运行: node scripts/youtube-setup.mjs";
+const YT_AUTH_MSG =
+  "YouTube闇€瑕佺櫥褰曡璇併€傝鍓嶅線 璁剧疆 鈫?杩炴帴 鎺堟潈YouTube璐﹀彿锛屾垨杩愯: node scripts/youtube-setup.mjs";
 
 function parseYtId(url: string): string {
-  const m = url.match(/(?:youtube\.com\/watch\?.*v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/);
+  const m = url.match(
+    /(?:youtube\.com\/watch\?.*v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
+  );
   if (m) return m[1];
-  throw new Error("无法识别的YouTube链接");
+  throw new Error("鏃犳硶璇嗗埆鐨刌ouTube閾炬帴");
 }
 
 function ytBaseArgs(): string[] {
@@ -643,9 +814,11 @@ function ytAudioArgs(): string[] {
 }
 
 function throwYtError(stderr: string): never {
-  if (stderr.includes("Sign in") || stderr.includes("bot")) throw new Error(YT_AUTH_MSG);
-  if (stderr.includes("ENOENT")) throw new Error("yt-dlp未安装。请运行: pip install yt-dlp");
-  throw new Error(`YouTube错误: ${stderr.slice(0, 300)}`);
+  if (stderr.includes("Sign in") || stderr.includes("bot"))
+    throw new Error(YT_AUTH_MSG);
+  if (stderr.includes("ENOENT"))
+    throw new Error("yt-dlp鏈畨瑁呫€傝杩愯: pip install yt-dlp");
+  throw new Error(`YouTube閿欒: ${stderr.slice(0, 300)}`);
 }
 
 type YtSubtitleTrack = {
@@ -661,7 +834,15 @@ type YtDlpMeta = {
   uploader?: string;
   channel?: string;
   view_count?: number;
-  formats?: Array<{ format_id: string; ext: string; vcodec: string; height?: number; width?: number; resolution?: string; format_note?: string }>;
+  formats?: Array<{
+    format_id: string;
+    ext: string;
+    vcodec: string;
+    height?: number;
+    width?: number;
+    resolution?: string;
+    format_note?: string;
+  }>;
   subtitles?: Record<string, YtSubtitleTrack[]>;
   automatic_captions?: Record<string, YtSubtitleTrack[]>;
 };
@@ -673,41 +854,106 @@ async function ytInfo(url: string): Promise<VideoInfo> {
   const seen = new Set<string>();
   const fmts = (d.formats ?? [])
     .filter((f) => f.vcodec !== "none" && f.ext === "mp4" && f.height)
-    .map((f) => ({ format_id: String(f.format_id), ext: "mp4", resolution: f.resolution ?? `${f.width}x${f.height}`, note: `${f.format_note ?? ""} 服务端代理下载`.trim() }))
-    .filter((f) => { if (seen.has(f.resolution)) return false; seen.add(f.resolution); return true; });
+    .map((f) => ({
+      format_id: String(f.format_id),
+      ext: "mp4",
+      resolution: f.resolution ?? `${f.width}x${f.height}`,
+      note: `${f.format_note ?? ""} server-side proxy download`.trim(),
+    }))
+    .filter((f) => {
+      if (seen.has(f.resolution)) return false;
+      seen.add(f.resolution);
+      return true;
+    });
   return {
-    title: d.title ?? "", thumbnail: d.thumbnail ?? "", duration: d.duration ?? 0,
-    uploader: d.uploader ?? d.channel ?? "", platform: "youtube", view_count: d.view_count ?? 0, formats: fmts,
+    title: d.title ?? "",
+    thumbnail: d.thumbnail ?? "",
+    duration: d.duration ?? 0,
+    uploader: d.uploader ?? d.channel ?? "",
+    platform: "youtube",
+    view_count: d.view_count ?? 0,
+    formats: fmts,
   };
 }
 
-async function ytDownloadVideo(url: string): Promise<{ path: string; title: string; duration: number }> {
-  const infoR = await runCommand("yt-dlp", [...ytBaseArgs(), "-j", url], 60_000);
+async function ytDownloadVideo(
+  url: string,
+): Promise<{ path: string; title: string; duration: number }> {
+  const infoR = await runCommand(
+    "yt-dlp",
+    [...ytBaseArgs(), "-j", url],
+    60_000,
+  );
   if (infoR.exitCode !== 0) throwYtError(infoR.stderr);
   const d = JSON.parse(infoR.stdout) as YtDlpMeta;
   const out = tempFile("mp4");
-  const dlR = await runCommand("yt-dlp", [
-    ...ytBaseArgs(), "-f", "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720]/best",
-    "--merge-output-format", "mp4", "--no-part", "-o", out, url,
-  ], 180_000);
-  if (dlR.exitCode !== 0) { tryUnlink(out); throwYtError(dlR.stderr); }
-  return { path: out, title: d.title ?? "YouTube Video", duration: d.duration ?? 0 };
+  const dlR = await runCommand(
+    "yt-dlp",
+    [
+      ...ytBaseArgs(),
+      "-f",
+      "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720]/best",
+      "--merge-output-format",
+      "mp4",
+      "--no-part",
+      "-o",
+      out,
+      url,
+    ],
+    180_000,
+  );
+  if (dlR.exitCode !== 0) {
+    tryUnlink(out);
+    throwYtError(dlR.stderr);
+  }
+  return {
+    path: out,
+    title: d.title ?? "YouTube Video",
+    duration: d.duration ?? 0,
+  };
 }
 
-async function ytDownloadAudio(url: string): Promise<{ path: string; title: string; duration: number }> {
-  const infoR = await runCommand("yt-dlp", [...ytAudioArgs(), "-j", url], 60_000);
+async function ytDownloadAudio(
+  url: string,
+): Promise<{ path: string; title: string; duration: number }> {
+  const infoR = await runCommand(
+    "yt-dlp",
+    [...ytAudioArgs(), "-j", url],
+    60_000,
+  );
   if (infoR.exitCode !== 0) throwYtError(infoR.stderr);
   const d = JSON.parse(infoR.stdout) as YtDlpMeta;
   const out = tempFile("mp3");
-  const dlR = await runCommand("yt-dlp", [
-    ...ytAudioArgs(), "-x", "--audio-format", "mp3", "--audio-quality", "0",
-    "--no-part", "-o", out, url,
-  ], 180_000);
-  if (dlR.exitCode !== 0) { tryUnlink(out); throwYtError(dlR.stderr); }
-  return { path: out, title: d.title ?? "YouTube Video", duration: d.duration ?? 0 };
+  const dlR = await runCommand(
+    "yt-dlp",
+    [
+      ...ytAudioArgs(),
+      "-x",
+      "--audio-format",
+      "mp3",
+      "--audio-quality",
+      "0",
+      "--no-part",
+      "-o",
+      out,
+      url,
+    ],
+    180_000,
+  );
+  if (dlR.exitCode !== 0) {
+    tryUnlink(out);
+    throwYtError(dlR.stderr);
+  }
+  return {
+    path: out,
+    title: d.title ?? "YouTube Video",
+    duration: d.duration ?? 0,
+  };
 }
 
-async function ytDownloadAudioFast(url: string): Promise<{ path: string; title: string; duration: number }> {
+async function ytDownloadAudioFast(
+  url: string,
+): Promise<{ path: string; title: string; duration: number }> {
   const out = tempFile("mp3");
   const dlR = await runCommand(
     "yt-dlp",
@@ -753,35 +999,57 @@ async function ytSubtitles(url: string, lang: string): Promise<SubtitleBundle> {
     throw new Error("This YouTube video does not expose usable subtitles.");
   }
 
-  const subtitleSource: "official" | "automatic" = manualPick ? "official" : "automatic";
+  const subtitleSource: "official" | "automatic" = manualPick
+    ? "official"
+    : "automatic";
   const [language, tracks] = picked;
   const trackList = Array.isArray(tracks) ? tracks : [];
-  const vttTrack =
-    trackList.find((track) => track?.ext === "vtt" && typeof track.url === "string");
+  const vttTrack = trackList.find(
+    (track) => track?.ext === "vtt" && typeof track.url === "string",
+  );
   const srtTrack =
-    trackList.find((track) => track?.ext === "srt" && typeof track.url === "string") ??
-    vttTrack;
+    trackList.find(
+      (track) => track?.ext === "srt" && typeof track.url === "string",
+    ) ?? vttTrack;
   if (!vttTrack && !srtTrack) {
-    throw new Error("YouTube subtitles were listed but no downloadable subtitle track was available.");
+    throw new Error(
+      "YouTube subtitles were listed but no downloadable subtitle track was available.",
+    );
   }
 
   const [vttTextRaw, srtTextRaw] = await Promise.all([
     vttTrack?.url
-      ? fetchTextWithOptionalProxy(vttTrack.url, MEDIA_SUBTITLE_FETCH_TIMEOUT_MS)
+      ? fetchTextWithOptionalProxy(
+          vttTrack.url,
+          MEDIA_SUBTITLE_FETCH_TIMEOUT_MS,
+        )
       : Promise.resolve(""),
     srtTrack?.url
-      ? fetchTextWithOptionalProxy(srtTrack.url, MEDIA_SUBTITLE_FETCH_TIMEOUT_MS)
+      ? fetchTextWithOptionalProxy(
+          srtTrack.url,
+          MEDIA_SUBTITLE_FETCH_TIMEOUT_MS,
+        )
       : Promise.resolve(""),
   ]);
 
-  const vttEntries =
-    parseSubtitleEntries(vttTextRaw, vttTrack?.ext === "srt" ? "srt" : "vtt");
-  const srtEntries =
-    parseSubtitleEntries(srtTextRaw, srtTrack?.ext === "vtt" ? "vtt" : "srt");
+  const vttEntries = parseSubtitleEntries(
+    vttTextRaw,
+    vttTrack?.ext === "srt" ? "srt" : "vtt",
+  );
+  const srtEntries = parseSubtitleEntries(
+    srtTextRaw,
+    srtTrack?.ext === "vtt" ? "vtt" : "srt",
+  );
   const entries =
-    vttEntries.length > 0 ? vttEntries : srtEntries.length > 0 ? srtEntries : [];
+    vttEntries.length > 0
+      ? vttEntries
+      : srtEntries.length > 0
+        ? srtEntries
+        : [];
   if (!entries.length) {
-    throw new Error("YouTube subtitle tracks were fetched, but no subtitle entries could be parsed.");
+    throw new Error(
+      "YouTube subtitle tracks were fetched, but no subtitle entries could be parsed.",
+    );
   }
   return buildSubtitleBundle(
     data.title ?? "YouTube Video",
@@ -815,7 +1083,9 @@ function directVideoExt(url: string): string {
   try {
     const parsed = new URL(url);
     const pathname = parsed.pathname.toLowerCase();
-    const matched = DIRECT_VIDEO_EXTENSIONS.find((ext) => pathname.endsWith(ext));
+    const matched = DIRECT_VIDEO_EXTENSIONS.find((ext) =>
+      pathname.endsWith(ext),
+    );
     return matched ? matched.slice(1) : "mp4";
   } catch {
     return "mp4";
@@ -825,8 +1095,11 @@ function directVideoExt(url: string): string {
 function directVideoTitle(url: string): string {
   try {
     const parsed = new URL(url);
-    const last = parsed.pathname.split("/").filter(Boolean).pop() || "remote-video";
-    return decodeURIComponent(last.replace(/\.[a-z0-9]+$/i, "")) || "remote-video";
+    const last =
+      parsed.pathname.split("/").filter(Boolean).pop() || "remote-video";
+    return (
+      decodeURIComponent(last.replace(/\.[a-z0-9]+$/i, "")) || "remote-video"
+    );
   } catch {
     return "remote-video";
   }
@@ -852,7 +1125,9 @@ async function directInfo(url: string): Promise<VideoInfo> {
   };
 }
 
-async function directDownloadVideo(url: string): Promise<{ path: string; title: string; duration: number }> {
+async function directDownloadVideo(
+  url: string,
+): Promise<{ path: string; title: string; duration: number }> {
   const ext = directVideoExt(url);
   const out = tempFile(ext);
   await streamToFile(url, out, {});
@@ -863,7 +1138,9 @@ async function directDownloadVideo(url: string): Promise<{ path: string; title: 
   };
 }
 
-async function directDownloadAudio(url: string): Promise<{ path: string; title: string; duration: number }> {
+async function directDownloadAudio(
+  url: string,
+): Promise<{ path: string; title: string; duration: number }> {
   const video = await directDownloadVideo(url);
   const out = tempFile("mp3");
   try {
@@ -873,7 +1150,7 @@ async function directDownloadAudio(url: string): Promise<{ path: string; title: 
       300_000,
     );
     if (r.exitCode !== 0) {
-      throw new Error(`ffmpeg失败: ${r.stderr.slice(0, 200)}`);
+      throw new Error(`ffmpeg澶辫触: ${r.stderr.slice(0, 200)}`);
     }
     return {
       path: out,
@@ -888,7 +1165,11 @@ async function directDownloadAudio(url: string): Promise<{ path: string; title: 
 async function transcribeSubtitleFallback(
   platform: "bilibili" | "youtube" | "douyin" | "xiaohongshu" | "direct",
   language: string,
-  downloadAudio: () => Promise<{ path: string; title: string; duration: number }>,
+  downloadAudio: () => Promise<{
+    path: string;
+    title: string;
+    duration: number;
+  }>,
 ): Promise<SubtitleBundle> {
   const audio = await downloadAudio();
   let normalizedAudioPath: string | undefined;
@@ -934,9 +1215,9 @@ async function transcribeSubtitleFallback(
   }
 }
 
-/* ══════════════════════════════════════════════════════════
-   Xiaohongshu — via XHS-Downloader Docker API (port 5556)
-   ══════════════════════════════════════════════════════════ */
+/* 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+   Xiaohongshu 鈥?via XHS-Downloader Docker API (port 5556)
+   鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲 */
 
 type XhsNote = {
   title?: string;
@@ -944,8 +1225,20 @@ type XhsNote = {
   user?: { nickname?: string };
   author?: { nickname?: string };
   image_list?: Array<{ url?: string; url_default?: string }>;
-  video?: { media?: { stream?: { h264?: Array<{ master_url?: string; backup_urls?: string[] }> } } };
-  video_info_v2?: { media?: { stream?: { h264?: Array<{ master_url?: string; backup_urls?: string[] }> } } };
+  video?: {
+    media?: {
+      stream?: {
+        h264?: Array<{ master_url?: string; backup_urls?: string[] }>;
+      };
+    };
+  };
+  video_info_v2?: {
+    media?: {
+      stream?: {
+        h264?: Array<{ master_url?: string; backup_urls?: string[] }>;
+      };
+    };
+  };
   interact_info?: { liked_count?: string; view_count?: string };
   type?: string;
 };
@@ -964,7 +1257,10 @@ async function getXhsCookie(params: Record<string, unknown>): Promise<string> {
   );
 }
 
-async function xhsApiCall(noteUrl: string, params: Record<string, unknown>): Promise<{ message: string; data: XhsNote }> {
+async function xhsApiCall(
+  noteUrl: string,
+  params: Record<string, unknown>,
+): Promise<{ message: string; data: XhsNote }> {
   const cookie = await getXhsCookie(params);
   const env = getServerEnv();
   let res: Response;
@@ -981,9 +1277,9 @@ async function xhsApiCall(noteUrl: string, params: Record<string, unknown>): Pro
     );
   }
   if (!res.ok) throw new Error(`XHS API HTTP ${res.status}`);
-  const json = await res.json() as { message: string; data: XhsNote };
+  const json = (await res.json()) as { message: string; data: XhsNote };
   if (!json.data || Object.keys(json.data).length === 0) {
-    // Cookie expired — mark as expired if we have tenant context
+    // Cookie expired 鈥?mark as expired if we have tenant context
     const ctx = params._context as { tenantId?: string } | undefined;
     if (ctx?.tenantId) {
       const { credentialStore } = await import("@/lib/server/credential-store");
@@ -1002,11 +1298,16 @@ function parseXhsUrl(url: string): string {
   return n;
 }
 
-async function xhsInfo(url: string, params: Record<string, unknown>): Promise<VideoInfo> {
+async function xhsInfo(
+  url: string,
+  params: Record<string, unknown>,
+): Promise<VideoInfo> {
   const { data } = await xhsApiCall(parseXhsUrl(url), params);
-  const title = data.title ?? data.desc ?? "小红书笔记";
-  const uploader = data.user?.nickname ?? data.author?.nickname ?? "未知作者";
-  const thumbnail = data.image_list?.[0]?.url_default ?? data.image_list?.[0]?.url ?? "";
+  const title = data.title ?? data.desc ?? "Xiaohongshu note";
+  const uploader =
+    data.user?.nickname ?? data.author?.nickname ?? "Unknown creator";
+  const thumbnail =
+    data.image_list?.[0]?.url_default ?? data.image_list?.[0]?.url ?? "";
   const isVideo = data.type === "video" || !!data.video?.media;
   return {
     title,
@@ -1016,22 +1317,40 @@ async function xhsInfo(url: string, params: Record<string, unknown>): Promise<Vi
     platform: "xiaohongshu",
     view_count: Number(data.interact_info?.view_count ?? 0),
     formats: isVideo
-      ? [{ format_id: "mp4", ext: "mp4", resolution: "unknown", note: "视频笔记" }]
-      : data.image_list?.map((_, i) => ({ format_id: `img-${i}`, ext: "jpg", resolution: "original", note: `图片 ${i + 1}` })) ?? [],
+      ? [
+          {
+            format_id: "mp4",
+            ext: "mp4",
+            resolution: "unknown",
+            note: "瑙嗛绗旇",
+          },
+        ]
+      : (data.image_list?.map((_, i) => ({
+          format_id: `img-${i}`,
+          ext: "jpg",
+          resolution: "original",
+          note: `鍥剧墖 ${i + 1}`,
+        })) ?? []),
   };
 }
 
 function xhsPickVideoUrl(data: XhsNote): string {
-  const streams = data.video?.media?.stream?.h264 ?? data.video_info_v2?.media?.stream?.h264 ?? [];
+  const streams =
+    data.video?.media?.stream?.h264 ??
+    data.video_info_v2?.media?.stream?.h264 ??
+    [];
   const first = streams[0];
   if (first?.master_url) return first.master_url;
   if (first?.backup_urls?.length) return first.backup_urls[0];
-  throw new Error("小红书笔记没有视频内容，或视频流地址无法解析");
+  throw new Error("Xiaohongshu note has no downloadable video content.");
 }
 
-async function xhsDownloadVideo(url: string, params: Record<string, unknown>): Promise<{ path: string; title: string; duration: number }> {
+async function xhsDownloadVideo(
+  url: string,
+  params: Record<string, unknown>,
+): Promise<{ path: string; title: string; duration: number }> {
   const { data } = await xhsApiCall(parseXhsUrl(url), params);
-  const title = data.title ?? data.desc ?? "小红书笔记";
+  const title = data.title ?? data.desc ?? "Xiaohongshu note";
 
   // If video note, download video; otherwise download first image
   if (data.type === "video" || data.video?.media) {
@@ -1042,37 +1361,54 @@ async function xhsDownloadVideo(url: string, params: Record<string, unknown>): P
   }
 
   const imgUrl = data.image_list?.[0]?.url_default ?? data.image_list?.[0]?.url;
-  if (!imgUrl) throw new Error("小红书笔记没有可下载的图片或视频");
+  if (!imgUrl)
+    throw new Error("Xiaohongshu note has no downloadable image or video.");
   const out = tempFile("jpg");
   await streamToFile(imgUrl, out, {});
   return { path: out, title, duration: 0 };
 }
 
-async function xhsDownloadAudio(url: string, params: Record<string, unknown>): Promise<{ path: string; title: string; duration: number }> {
+async function xhsDownloadAudio(
+  url: string,
+  params: Record<string, unknown>,
+): Promise<{ path: string; title: string; duration: number }> {
   const { data } = await xhsApiCall(parseXhsUrl(url), params);
-  const title = data.title ?? data.desc ?? "小红书笔记";
+  const title = data.title ?? data.desc ?? "Xiaohongshu note";
   const videoUrl = xhsPickVideoUrl(data);
-  const vTmp = tempFile("mp4"), out = tempFile("mp3");
+  const vTmp = tempFile("mp4"),
+    out = tempFile("mp3");
   try {
     await streamToFile(videoUrl, vTmp, {});
-    const r = await runCommand("ffmpeg", ["-y", "-i", vTmp, "-vn", "-c:a", "libmp3lame", "-q:a", "0", out], 300_000);
-    if (r.exitCode !== 0) throw new Error(`ffmpeg失败: ${r.stderr.slice(0, 200)}`);
+    const r = await runCommand(
+      "ffmpeg",
+      ["-y", "-i", vTmp, "-vn", "-c:a", "libmp3lame", "-q:a", "0", out],
+      300_000,
+    );
+    if (r.exitCode !== 0)
+      throw new Error(`ffmpeg澶辫触: ${r.stderr.slice(0, 200)}`);
     return { path: out, title, duration: 0 };
   } finally {
     tryUnlink(vTmp);
   }
 }
 
-/* ══════════════════════════════════════════════════════════
+/* 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
    Platform router
-   ══════════════════════════════════════════════════════════ */
+   鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲 */
 
 type Platform = "bilibili" | "douyin" | "youtube" | "xiaohongshu" | "direct";
 const PLATFORMS: Array<{ name: Platform; match: (u: string) => boolean }> = [
   { name: "bilibili", match: (u) => /bilibili\.com|b23\.tv/i.test(u) },
-  { name: "douyin", match: (u) => /douyin\.com\/video|iesdouyin\.com\/share\/video|v\.douyin\.com/i.test(u) },
+  {
+    name: "douyin",
+    match: (u) =>
+      /douyin\.com\/video|iesdouyin\.com\/share\/video|v\.douyin\.com/i.test(u),
+  },
   { name: "youtube", match: (u) => /youtube\.com|youtu\.be/i.test(u) },
-  { name: "xiaohongshu", match: (u) => /xiaohongshu\.com|xhslink\.com|xhs\.link/i.test(u) },
+  {
+    name: "xiaohongshu",
+    match: (u) => /xiaohongshu\.com|xhslink\.com|xhs\.link/i.test(u),
+  },
   { name: "direct", match: (u) => looksLikeDirectVideoUrl(u) },
 ];
 
@@ -1081,30 +1417,44 @@ function detect(url: string): Platform | null {
 }
 
 function fail(code: string, msg: string, start: number) {
-  return { status: "failed" as const, error: { code, message: msg }, duration_ms: Date.now() - start };
+  return {
+    status: "failed" as const,
+    error: { code, message: msg },
+    duration_ms: Date.now() - start,
+  };
 }
 
 const UNSUPPORTED_MSG = [
-  "暂不支持该平台。",
-  "✅ 已支持：B站、抖音、YouTube（服务端代理，无需翻墙）、小红书（需扫码授权）",
-  "🎵 音乐搜索：试试「搜索歌曲 xxx」使用网易云音乐",
-  "❌ 不可用：快手(验证码)、微博(需登录)",
+  "Unsupported platform for the legacy media downloader.",
+  "Supported legacy sources: Bilibili, Douyin, YouTube, Xiaohongshu, and direct video URLs.",
+  "Enable VidBee to cover a wider range of media sources through the unified Ark backend.",
 ].join("\n");
 
-/* ══════════════════════════════════════════════════════════
-   Tool 1: media.video_info
-   ══════════════════════════════════════════════════════════ */
+type NormalizedVideoInfo = VideoInfo & {
+  provider: MediaProviderName;
+  provider_raw_platform?: string;
+};
 
-const videoInfoManifest: ToolManifest = {
-  id: "media.video_info",
-  name: "Media Video Info",
-  description: "获取视频信息（B站/抖音/YouTube/小红书/直链视频 — 标题、时长、封面等）",
-  category: "video",
-  tags: ["video", "info", "bilibili", "douyin", "youtube", "xhs", "direct", "抖音", "b站", "油管", "小红书"],
-  params: [{ name: "url", type: "string", required: true, description: "视频链接（bilibili / douyin / youtube / xiaohongshu / direct media url）" }],
-  output_type: "json",
-  keywords: ["video info", "视频信息", "bilibili", "抖音", "douyin", "youtube", "油管", "小红书", "xhs", "video url"],
-  patterns: ["(bilibili|b站|douyin|抖音|youtube|油管|小红书|xhs|video url).*info"],
+type DlResult = {
+  path: string;
+  title: string;
+  duration: number;
+  platform: string;
+  provider: MediaProviderName;
+  provider_job_id?: string;
+  provider_raw_status?: string;
+  thumbnail?: string;
+  filesize?: number;
+  resolution?: string;
+  format?: string;
+  uploader?: string;
+  view_count?: number;
+};
+
+type MediaProviderFailure = Error & {
+  code?: string;
+  provider?: MediaProviderName;
+  retryable?: boolean;
 };
 
 type MediaFn<T> = (u: string, p: Record<string, unknown>) => Promise<T>;
@@ -1117,40 +1467,10 @@ const infoFn: Record<Platform, MediaFn<VideoInfo>> = {
   direct: (u) => directInfo(u),
 };
 
-const videoInfoHandler: ToolHandler = async (params) => {
-  const start = Date.now();
-  const url = params.url as string;
-  const p = detect(url);
-  if (!p) return fail("unsupported_platform", UNSUPPORTED_MSG, start);
-  try {
-    const info = await infoFn[p](url, params);
-    return { status: "success", output: { ...info, duration_str: formatDuration(info.duration) }, duration_ms: Date.now() - start };
-  } catch (err) {
-    return fail("media_error", (err as Error).message, start);
-  }
-};
-
-export const mediaVideoInfo: ToolRegistryEntry = { manifest: videoInfoManifest, handler: videoInfoHandler, timeout: LONG_TIMEOUT_MS };
-
-/* ══════════════════════════════════════════════════════════
-   Tool 2: media.download_video
-   ══════════════════════════════════════════════════════════ */
-
-const downloadVideoManifest: ToolManifest = {
-  id: "media.download_video",
-  name: "Media Download Video",
-  description: "下载视频MP4（B站480p / 抖音720p / YouTube 720p / 小红书图文或视频 / 直链视频）",
-  category: "video",
-  tags: ["download", "video", "bilibili", "douyin", "youtube", "xhs", "direct", "小红书"],
-  params: [{ name: "url", type: "string", required: true, description: "视频链接" }],
-  output_type: "file",
-  keywords: ["下载视频", "download video", "bilibili", "抖音", "douyin", "youtube", "油管", "小红书", "xhs", "video url"],
-  patterns: ["下载.*(bilibili|b站|douyin|抖音|youtube|油管|视频|小红书|xhs|video url)"],
-};
-
-type DlResult = { path: string; title: string; duration: number };
-
-const dlVideoFn: Record<Platform, MediaFn<DlResult>> = {
+const dlVideoFn: Record<
+  Platform,
+  MediaFn<{ path: string; title: string; duration: number }>
+> = {
   bilibili: (u) => biliDownloadVideo(u),
   douyin: (u) => douyinDownloadVideo(u),
   youtube: (u) => ytDownloadVideo(u),
@@ -1158,50 +1478,10 @@ const dlVideoFn: Record<Platform, MediaFn<DlResult>> = {
   direct: (u) => directDownloadVideo(u),
 };
 
-const downloadVideoHandler: ToolHandler = async (params) => {
-  const start = Date.now();
-  const url = params.url as string;
-  const p = detect(url);
-  if (!p) return fail("unsupported_platform", UNSUPPORTED_MSG, start);
-  try {
-    const info = await infoFn[p](url, params);
-    const r = await dlVideoFn[p](url, params);
-    return {
-      status: "success",
-      output_url: r.path,
-      output: {
-        title: r.title,
-        duration: r.duration,
-        duration_str: formatDuration(r.duration),
-        platform: p,
-        thumbnail: info.thumbnail,
-      },
-      duration_ms: Date.now() - start,
-    };
-  } catch (err) {
-    return fail("media_error", (err as Error).message, start);
-  }
-};
-
-export const mediaDownloadVideo: ToolRegistryEntry = { manifest: downloadVideoManifest, handler: downloadVideoHandler, timeout: LONG_TIMEOUT_MS };
-
-/* ══════════════════════════════════════════════════════════
-   Tool 3: media.download_audio
-   ══════════════════════════════════════════════════════════ */
-
-const downloadAudioManifest: ToolManifest = {
-  id: "media.download_audio",
-  name: "Media Download Audio",
-  description: "从视频提取音频MP3（B站/抖音/YouTube/小红书视频笔记/直链视频）",
-  category: "video",
-  tags: ["download", "audio", "mp3", "bilibili", "douyin", "youtube", "xhs", "direct", "小红书"],
-  params: [{ name: "url", type: "string", required: true, description: "视频链接" }],
-  output_type: "file",
-  keywords: ["下载音频", "提取音频", "download audio", "youtube", "油管", "小红书", "xhs", "video url"],
-  patterns: [],
-};
-
-const dlAudioFn: Record<Platform, MediaFn<DlResult>> = {
+const dlAudioFn: Record<
+  Platform,
+  MediaFn<{ path: string; title: string; duration: number }>
+> = {
   bilibili: (u) => biliDownloadAudio(u),
   douyin: (u) => douyinDownloadAudio(u),
   youtube: (u) => ytDownloadAudio(u),
@@ -1209,50 +1489,757 @@ const dlAudioFn: Record<Platform, MediaFn<DlResult>> = {
   direct: (u) => directDownloadAudio(u),
 };
 
-const downloadAudioHandler: ToolHandler = async (params) => {
-  const start = Date.now();
-  const url = params.url as string;
-  const p = detect(url);
-  if (!p) return fail("unsupported_platform", UNSUPPORTED_MSG, start);
+const OTHER_PROVIDER: Record<MediaProviderName, MediaProviderName> = {
+  legacy_internal: "vidbee",
+  vidbee: "legacy_internal",
+};
+
+const getStringParam = (
+  params: Record<string, unknown>,
+  keys: string[],
+): string | undefined => {
+  for (const key of keys) {
+    const value = params[key];
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed) {
+        return trimmed;
+      }
+    }
+  }
+  return undefined;
+};
+
+const getStringArrayParam = (
+  params: Record<string, unknown>,
+  keys: string[],
+): string[] | undefined => {
+  for (const key of keys) {
+    const value = params[key];
+    if (!Array.isArray(value)) {
+      continue;
+    }
+    const normalized = value
+      .map((item) => (typeof item === "string" ? item.trim() : ""))
+      .filter(Boolean);
+    if (normalized.length > 0) {
+      return normalized;
+    }
+  }
+  return undefined;
+};
+
+const toPositiveInt = (value: unknown, fallback = 0): number => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(0, Math.floor(value));
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return Math.max(0, Math.floor(parsed));
+    }
+  }
+  return Math.max(0, Math.floor(fallback));
+};
+
+const createMediaError = (
+  code: string,
+  message: string,
+  provider?: MediaProviderName,
+): MediaProviderFailure => {
+  const error = new Error(message) as MediaProviderFailure;
+  error.code = code;
+  error.provider = provider;
+  return error;
+};
+
+const normalizeProviderError = (
+  error: unknown,
+  provider: MediaProviderName,
+): MediaProviderFailure => {
+  if (error instanceof Error) {
+    const existing = error as MediaProviderFailure;
+    if (existing.code) {
+      existing.provider = existing.provider ?? provider;
+      return existing;
+    }
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLowerCase();
+  let code = "media_error";
+
+  if (
+    normalized.includes("unsupported_platform") ||
+    normalized.includes("unsupported platform")
+  ) {
+    code = "unsupported_platform";
+  } else if (
+    normalized.includes("auth") ||
+    normalized.includes("cookie") ||
+    normalized.includes("credential") ||
+    normalized.includes("login")
+  ) {
+    code = "auth_required";
+  } else if (
+    normalized.includes("timeout") ||
+    normalized.includes("timed out")
+  ) {
+    code = "timeout";
+  } else if (
+    normalized.includes("vidbee_unconfigured") ||
+    normalized.includes("vidbee_rpc_failed") ||
+    normalized.includes("econnrefused") ||
+    normalized.includes("enotfound") ||
+    normalized.includes("fetch failed")
+  ) {
+    code = "provider_unavailable";
+  } else if (
+    normalized.includes("download failed") ||
+    normalized.includes("did not finish") ||
+    normalized.includes("cannot access the downloaded file")
+  ) {
+    code = "download_failed";
+  }
+
+  return createMediaError(code, message, provider);
+};
+
+const errorCodePriority = [
+  "download_failed",
+  "auth_required",
+  "timeout",
+  "unsupported_platform",
+  "provider_unavailable",
+  "media_error",
+];
+
+const combineProviderErrors = (
+  errors: MediaProviderFailure[],
+): MediaProviderFailure => {
+  if (errors.length === 1) {
+    return errors[0];
+  }
+
+  const combinedMessage = errors
+    .map((error) => `[${error.provider ?? "unknown"}] ${error.message}`)
+    .join(" | ");
+
+  const code =
+    errorCodePriority.find((candidate) =>
+      errors.some((error) => error.code === candidate),
+    ) ?? "media_error";
+
+  return createMediaError(code, combinedMessage, errors[0]?.provider);
+};
+
+const orderedProviders = (
+  operation: MediaOperation,
+  config = getMediaProviderConfig(),
+): MediaProviderName[] => {
+  const primary = config.providers[operation];
+  if (!config.fallbackEnabled) {
+    return [primary];
+  }
+  return [primary, OTHER_PROVIDER[primary]];
+};
+
+const buildVidBeeRuntimeSettings = (
+  base: VidBeeRuntimeSettings,
+  params: Record<string, unknown>,
+): VidBeeRuntimeSettings | undefined => {
+  const merged: VidBeeRuntimeSettings = { ...base };
+
+  const downloadPath = getStringParam(params, [
+    "download_path",
+    "downloadPath",
+  ]);
+  if (downloadPath) {
+    merged.downloadPath = downloadPath;
+  }
+
+  const cookiesPath = getStringParam(params, ["cookies_path", "cookiesPath"]);
+  if (cookiesPath) {
+    merged.cookiesPath = cookiesPath;
+  }
+
+  const browserForCookies = getStringParam(params, [
+    "browser_for_cookies",
+    "browserForCookies",
+  ]);
+  if (browserForCookies) {
+    merged.browserForCookies = browserForCookies;
+  }
+
+  const proxy = getStringParam(params, ["proxy"]);
+  if (proxy) {
+    merged.proxy = proxy;
+  }
+
+  const hasAnySetting = Object.values(merged).some(
+    (value) => value !== undefined && value !== "",
+  );
+  return hasAnySetting ? merged : undefined;
+};
+
+const resolutionFromVidBeeFormat = (
+  format?: VidBeeVideoFormat,
+): string | undefined => {
+  if (!format) {
+    return undefined;
+  }
+  if (typeof format.height === "number" && format.height > 0) {
+    return `${Math.round(format.height)}p`;
+  }
+  if (typeof format.width === "number" && typeof format.height === "number") {
+    return `${Math.round(format.width)}x${Math.round(format.height)}`;
+  }
+  if (format.ext) {
+    return format.ext;
+  }
+  return undefined;
+};
+
+const noteFromVidBeeFormat = (format: VidBeeVideoFormat): string => {
+  const parts: string[] = [];
+  if (format.formatNote?.trim()) {
+    parts.push(format.formatNote.trim());
+  }
+  if (typeof format.tbr === "number" && Number.isFinite(format.tbr)) {
+    parts.push(`${Math.round(format.tbr)} kbps`);
+  }
+  if (format.vcodec && format.vcodec !== "none") {
+    parts.push(format.vcodec);
+  }
+  if (format.acodec && format.acodec !== "none") {
+    parts.push(format.acodec);
+  }
+  return parts.join(" / ") || format.ext;
+};
+
+const platformFromUrl = (value: string | undefined): string | undefined => {
+  if (!value) {
+    return undefined;
+  }
   try {
-    const info = await infoFn[p](url, params);
-    const r = await dlAudioFn[p](url, params);
-    return {
-      status: "success",
-      output_url: r.path,
-      output: {
-        title: r.title,
-        duration: r.duration,
-        duration_str: formatDuration(r.duration),
-        format: "mp3",
-        platform: p,
-        thumbnail: info.thumbnail,
-      },
-      duration_ms: Date.now() - start,
-    };
-  } catch (err) {
-    return fail("media_error", (err as Error).message, start);
+    const host = new URL(value).hostname.toLowerCase();
+    if (host.includes("youtube") || host === "youtu.be") return "youtube";
+    if (host.includes("bilibili") || host.includes("b23.tv")) return "bilibili";
+    if (host.includes("douyin") || host.includes("iesdouyin")) return "douyin";
+    if (host.includes("xiaohongshu") || host.includes("xhs"))
+      return "xiaohongshu";
+    if (host.includes("twitter") || host === "x.com") return "x";
+    if (host.includes("instagram")) return "instagram";
+    const parts = host.split(".").filter(Boolean);
+    return parts.length >= 2 ? parts[parts.length - 2] : host;
+  } catch {
+    return undefined;
   }
 };
 
-export const mediaDownloadAudio: ToolRegistryEntry = { manifest: downloadAudioManifest, handler: downloadAudioHandler, timeout: LONG_TIMEOUT_MS };
+const normalizeProviderPlatform = (
+  value: string | undefined,
+): string | undefined => {
+  if (!value) {
+    return undefined;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+  if (normalized.includes("youtube")) return "youtube";
+  if (normalized.includes("bili")) return "bilibili";
+  if (normalized.includes("douyin")) return "douyin";
+  if (normalized.includes("xiaohongshu") || normalized.includes("xhs"))
+    return "xiaohongshu";
+  if (normalized.includes("twitter") || normalized === "x") return "x";
+  if (normalized.includes("instagram")) return "instagram";
+  return normalized.replace(/[^a-z0-9]+/g, "_");
+};
 
-/* ══════════════════════════════════════════════════════════
-   Tool 4: media.extract_subtitle (Bilibili only)
-   ══════════════════════════════════════════════════════════ */
+const inferVidBeePlatform = (
+  url: string,
+  extractorKey?: string,
+  webpageUrl?: string,
+): string => {
+  return (
+    platformFromUrl(webpageUrl) ??
+    normalizeProviderPlatform(extractorKey) ??
+    platformFromUrl(url) ??
+    "vidbee"
+  );
+};
 
+const normalizeVidBeeInfo = (
+  url: string,
+  video: VidBeeVideoInfo,
+): NormalizedVideoInfo => ({
+  title: video.title?.trim() || "Untitled media",
+  thumbnail: video.thumbnail?.trim() || "",
+  duration: toPositiveInt(video.duration, 0),
+  uploader: video.uploader?.trim() || "",
+  platform: inferVidBeePlatform(url, video.extractorKey, video.webpageUrl),
+  view_count: toPositiveInt(video.viewCount, 0),
+  formats: Array.isArray(video.formats)
+    ? video.formats.map((format) => ({
+        format_id: format.formatId,
+        ext: format.ext,
+        resolution: resolutionFromVidBeeFormat(format) ?? format.ext,
+        note: noteFromVidBeeFormat(format),
+        filesize_approx:
+          typeof format.filesizeApprox === "number"
+            ? format.filesizeApprox
+            : typeof format.filesize === "number"
+              ? format.filesize
+              : undefined,
+      }))
+    : [],
+  provider: "vidbee",
+  provider_raw_platform:
+    normalizeProviderPlatform(video.extractorKey) ??
+    platformFromUrl(video.webpageUrl) ??
+    "vidbee",
+});
+
+const selectVidBeeFormat = (
+  formats: VidBeeVideoFormat[],
+  params: Record<string, unknown>,
+): VidBeeVideoFormat | undefined => {
+  const requestedFormatId = getStringParam(params, ["format_id", "formatId"]);
+  if (requestedFormatId) {
+    const exact = formats.find(
+      (format) => format.formatId === requestedFormatId,
+    );
+    if (exact) {
+      return exact;
+    }
+  }
+
+  const resolutionValue = getStringParam(params, ["resolution", "quality"]);
+  const heightMatch = resolutionValue?.match(/(\d{3,4})/);
+  if (heightMatch) {
+    const requestedHeight = Number(heightMatch[1]);
+    const candidates = formats
+      .filter((format) => typeof format.height === "number")
+      .sort((left, right) => (right.height ?? 0) - (left.height ?? 0));
+    const sameOrLower = candidates.find(
+      (format) => (format.height ?? 0) <= requestedHeight,
+    );
+    if (sameOrLower) {
+      return sameOrLower;
+    }
+    if (candidates.length > 0) {
+      return candidates[0];
+    }
+  }
+
+  const requestedExt = getStringParam(params, ["ext", "video_ext", "videoExt"]);
+  if (requestedExt) {
+    const exact = formats.find(
+      (format) => format.ext.toLowerCase() === requestedExt.toLowerCase(),
+    );
+    if (exact) {
+      return exact;
+    }
+  }
+
+  return undefined;
+};
+
+const runLegacyInfo = async (
+  url: string,
+  params: Record<string, unknown>,
+): Promise<NormalizedVideoInfo> => {
+  const platform = detect(url);
+  if (!platform) {
+    throw createMediaError(
+      "unsupported_platform",
+      UNSUPPORTED_MSG,
+      "legacy_internal",
+    );
+  }
+  try {
+    const info = await infoFn[platform](url, params);
+    return {
+      ...info,
+      platform: info.platform || platform,
+      provider: "legacy_internal",
+      provider_raw_platform: platform,
+    };
+  } catch (error) {
+    throw normalizeProviderError(error, "legacy_internal");
+  }
+};
+
+const runLegacyDownload = async (
+  kind: "video" | "audio",
+  url: string,
+  params: Record<string, unknown>,
+): Promise<DlResult> => {
+  const platform = detect(url);
+  if (!platform) {
+    throw createMediaError(
+      "unsupported_platform",
+      UNSUPPORTED_MSG,
+      "legacy_internal",
+    );
+  }
+
+  try {
+    const info = await infoFn[platform](url, params);
+    const result =
+      kind === "video"
+        ? await dlVideoFn[platform](url, params)
+        : await dlAudioFn[platform](url, params);
+
+    return {
+      path: result.path,
+      title: result.title,
+      duration: result.duration,
+      platform: info.platform || platform,
+      provider: "legacy_internal",
+      thumbnail: info.thumbnail,
+      uploader: info.uploader,
+      view_count: info.view_count,
+      format: kind === "audio" ? "mp3" : undefined,
+    };
+  } catch (error) {
+    throw normalizeProviderError(error, "legacy_internal");
+  }
+};
+
+const runVidBeeInfo = async (
+  url: string,
+  params: Record<string, unknown>,
+): Promise<NormalizedVideoInfo> => {
+  const config = getMediaProviderConfig();
+  const client = new VidBeeClient(config.vidbee);
+  const settings = buildVidBeeRuntimeSettings(
+    config.vidbee.runtimeSettings,
+    params,
+  );
+
+  try {
+    const video = await client.getVideoInfo(url, settings);
+    return normalizeVidBeeInfo(url, video);
+  } catch (error) {
+    throw normalizeProviderError(error, "vidbee");
+  }
+};
+
+const runVidBeeDownload = async (
+  kind: "video" | "audio",
+  url: string,
+  params: Record<string, unknown>,
+): Promise<DlResult> => {
+  const config = getMediaProviderConfig();
+  const client = new VidBeeClient(config.vidbee);
+  const settings = buildVidBeeRuntimeSettings(
+    config.vidbee.runtimeSettings,
+    params,
+  );
+
+  try {
+    const video = await client.getVideoInfo(url, settings);
+    const normalizedInfo = normalizeVidBeeInfo(url, video);
+    const selectedFormat =
+      kind === "video"
+        ? selectVidBeeFormat(video.formats ?? [], params)
+        : undefined;
+    const requestedFormat = getStringParam(params, ["format"]);
+    const requestedAudioFormat =
+      getStringParam(params, ["audio_format", "audioFormat", "format"]) ??
+      "mp3";
+    const requestedAudioFormatIds = getStringArrayParam(params, [
+      "audio_format_ids",
+      "audioFormatIds",
+    ]);
+
+    const created = await client.createDownload({
+      url,
+      type: kind,
+      title: video.title,
+      thumbnail: video.thumbnail,
+      duration: video.duration,
+      description: video.description,
+      uploader: video.uploader,
+      viewCount: video.viewCount,
+      tags: video.tags,
+      selectedFormat,
+      format: kind === "video" ? requestedFormat : undefined,
+      audioFormat: kind === "audio" ? requestedAudioFormat : undefined,
+      audioFormatIds: kind === "audio" ? requestedAudioFormatIds : undefined,
+      customDownloadPath: getStringParam(params, [
+        "download_path",
+        "downloadPath",
+      ]),
+      settings,
+    });
+
+    const task = await client.waitForDownload(created.id);
+    if (task.status !== "completed") {
+      throw createMediaError(
+        "download_failed",
+        task.error?.trim() ||
+          `VidBee download ended with status ${task.status}.`,
+        "vidbee",
+      );
+    }
+
+    const localPath = client.resolveLocalFilePath(task);
+    if (!localPath || !existsSync(localPath)) {
+      throw createMediaError(
+        "download_failed",
+        "VidBee completed the task but Ark cannot access the downloaded file. Ensure both services share the same download directory.",
+        "vidbee",
+      );
+    }
+
+    const finalFormat = task.selectedFormat ?? selectedFormat;
+    const fallbackFormat =
+      kind === "audio"
+        ? requestedAudioFormat
+        : (finalFormat?.ext ?? getStringParam(params, ["format"]) ?? "mp4");
+
+    return {
+      path: localPath,
+      title: task.title?.trim() || normalizedInfo.title,
+      duration: toPositiveInt(task.duration, normalizedInfo.duration),
+      platform: normalizedInfo.platform,
+      provider: "vidbee",
+      provider_job_id: task.id,
+      provider_raw_status: task.status,
+      thumbnail: task.thumbnail?.trim() || normalizedInfo.thumbnail,
+      filesize: typeof task.fileSize === "number" ? task.fileSize : undefined,
+      resolution:
+        kind === "video" ? resolutionFromVidBeeFormat(finalFormat) : undefined,
+      format: fallbackFormat,
+      uploader: task.uploader?.trim() || normalizedInfo.uploader,
+      view_count:
+        typeof task.viewCount === "number"
+          ? task.viewCount
+          : normalizedInfo.view_count,
+    };
+  } catch (error) {
+    throw normalizeProviderError(error, "vidbee");
+  }
+};
+
+const executeMediaOperation = async <T>(
+  operation: MediaOperation,
+  runners: Record<MediaProviderName, () => Promise<T>>,
+): Promise<T> => {
+  const providers = orderedProviders(operation);
+  const errors: MediaProviderFailure[] = [];
+
+  for (const provider of providers) {
+    try {
+      return await runners[provider]();
+    } catch (error) {
+      errors.push(normalizeProviderError(error, provider));
+    }
+  }
+
+  throw combineProviderErrors(errors);
+};
+
+const videoInfoManifest: ToolManifest = {
+  id: "media.video_info",
+  name: "Media Video Info",
+  description:
+    "Fetch normalized media metadata through Ark's unified media provider layer.",
+  category: "video",
+  tags: ["video", "info", "media", "download", "metadata"],
+  params: [
+    {
+      name: "url",
+      type: "string",
+      required: true,
+      description: "Video or media page URL.",
+    },
+  ],
+  output_type: "json",
+  keywords: ["video info", "media info", "download metadata", "video url"],
+  patterns: ["(video|media|download).*info"],
+};
+
+const videoInfoHandler: ToolHandler = async (params) => {
+  const start = Date.now();
+  const url = typeof params.url === "string" ? params.url.trim() : "";
+  if (!url) {
+    return fail("bad_request", "Missing required parameter: url", start);
+  }
+
+  try {
+    const info = await executeMediaOperation("video_info", {
+      legacy_internal: () => runLegacyInfo(url, params),
+      vidbee: () => runVidBeeInfo(url, params),
+    });
+    return {
+      status: "success",
+      output: {
+        ...info,
+        duration_str: formatDuration(info.duration),
+      },
+      duration_ms: Date.now() - start,
+    };
+  } catch (error) {
+    const normalized = normalizeProviderError(error, "legacy_internal");
+    return fail(normalized.code ?? "media_error", normalized.message, start);
+  }
+};
+
+export const mediaVideoInfo: ToolRegistryEntry = {
+  manifest: videoInfoManifest,
+  handler: videoInfoHandler,
+  timeout: LONG_TIMEOUT_MS,
+};
+
+const downloadVideoManifest: ToolManifest = {
+  id: "media.download_video",
+  name: "Media Download Video",
+  description: "Download video through Ark's unified media provider layer.",
+  category: "video",
+  tags: ["download", "video", "media"],
+  params: [
+    { name: "url", type: "string", required: true, description: "Video URL" },
+  ],
+  output_type: "file",
+  keywords: ["download video", "media download", "save video"],
+  patterns: ["download.*video"],
+};
+
+const downloadVideoHandler: ToolHandler = async (params) => {
+  const start = Date.now();
+  const url = typeof params.url === "string" ? params.url.trim() : "";
+  if (!url) {
+    return fail("bad_request", "Missing required parameter: url", start);
+  }
+
+  try {
+    const result = await executeMediaOperation("download_video", {
+      legacy_internal: () => runLegacyDownload("video", url, params),
+      vidbee: () => runVidBeeDownload("video", url, params),
+    });
+    return {
+      status: "success",
+      output_url: result.path,
+      output: {
+        title: result.title,
+        duration: result.duration,
+        duration_str: formatDuration(result.duration),
+        platform: result.platform,
+        thumbnail: result.thumbnail,
+        provider: result.provider,
+        provider_job_id: result.provider_job_id,
+        provider_raw_status: result.provider_raw_status,
+        uploader: result.uploader,
+        view_count: result.view_count,
+        filesize: result.filesize,
+        resolution: result.resolution,
+        format: result.format,
+      },
+      duration_ms: Date.now() - start,
+    };
+  } catch (error) {
+    const normalized = normalizeProviderError(error, "legacy_internal");
+    return fail(normalized.code ?? "media_error", normalized.message, start);
+  }
+};
+
+export const mediaDownloadVideo: ToolRegistryEntry = {
+  manifest: downloadVideoManifest,
+  handler: downloadVideoHandler,
+  timeout: LONG_TIMEOUT_MS,
+};
+
+const downloadAudioManifest: ToolManifest = {
+  id: "media.download_audio",
+  name: "Media Download Audio",
+  description: "Extract audio through Ark's unified media provider layer.",
+  category: "video",
+  tags: ["download", "audio", "media", "mp3"],
+  params: [
+    { name: "url", type: "string", required: true, description: "Video URL" },
+  ],
+  output_type: "file",
+  keywords: ["download audio", "extract audio", "save audio"],
+  patterns: ["download.*audio"],
+};
+
+const downloadAudioHandler: ToolHandler = async (params) => {
+  const start = Date.now();
+  const url = typeof params.url === "string" ? params.url.trim() : "";
+  if (!url) {
+    return fail("bad_request", "Missing required parameter: url", start);
+  }
+
+  try {
+    const result = await executeMediaOperation("download_audio", {
+      legacy_internal: () => runLegacyDownload("audio", url, params),
+      vidbee: () => runVidBeeDownload("audio", url, params),
+    });
+    return {
+      status: "success",
+      output_url: result.path,
+      output: {
+        title: result.title,
+        duration: result.duration,
+        duration_str: formatDuration(result.duration),
+        format: result.format ?? "mp3",
+        platform: result.platform,
+        thumbnail: result.thumbnail,
+        provider: result.provider,
+        provider_job_id: result.provider_job_id,
+        provider_raw_status: result.provider_raw_status,
+        uploader: result.uploader,
+        view_count: result.view_count,
+        filesize: result.filesize,
+      },
+      duration_ms: Date.now() - start,
+    };
+  } catch (error) {
+    const normalized = normalizeProviderError(error, "legacy_internal");
+    return fail(normalized.code ?? "media_error", normalized.message, start);
+  }
+};
+
+export const mediaDownloadAudio: ToolRegistryEntry = {
+  manifest: downloadAudioManifest,
+  handler: downloadAudioHandler,
+  timeout: LONG_TIMEOUT_MS,
+};
 const extractSubtitleManifest: ToolManifest = {
   id: "media.extract_subtitle",
   name: "Media Extract Subtitle",
-  description: "Extract subtitles from supported media links with a unified TXT/SRT/VTT result contract.",
+  description:
+    "Extract subtitles from supported media links with a unified TXT/SRT/VTT result contract.",
   category: "video",
-  tags: ["subtitle", "caption", "srt", "vtt", "字幕", "bilibili", "youtube"],
+  tags: ["subtitle", "caption", "srt", "vtt", "瀛楀箷", "bilibili", "youtube"],
   params: [
-    { name: "url", type: "string", required: true, description: "Supported media URL" },
-    { name: "language", type: "string", required: false, default: "zh-Hans", description: "Preferred subtitle language code" },
+    {
+      name: "url",
+      type: "string",
+      required: true,
+      description: "Supported media URL",
+    },
+    {
+      name: "language",
+      type: "string",
+      required: false,
+      default: "zh-Hans",
+      description: "Preferred subtitle language code",
+    },
   ],
   output_type: "json",
-  keywords: ["字幕", "subtitle", "caption", "提取字幕", "youtube subtitle", "bilibili subtitle"],
+  keywords: [
+    "瀛楀箷",
+    "subtitle",
+    "caption",
+    "鎻愬彇瀛楀箷",
+    "youtube subtitle",
+    "bilibili subtitle",
+  ],
   patterns: [],
 };
 
@@ -1327,4 +2314,8 @@ const extractSubtitleHandler: ToolHandler = async (params) => {
   }
 };
 
-export const mediaExtractSubtitle: ToolRegistryEntry = { manifest: extractSubtitleManifest, handler: extractSubtitleHandler, timeout: LONG_TIMEOUT_MS };
+export const mediaExtractSubtitle: ToolRegistryEntry = {
+  manifest: extractSubtitleManifest,
+  handler: extractSubtitleHandler,
+  timeout: LONG_TIMEOUT_MS,
+};
