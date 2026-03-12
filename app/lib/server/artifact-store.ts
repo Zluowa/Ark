@@ -1,3 +1,4 @@
+﻿import { basename } from "node:path";
 import { randomUUID } from "node:crypto";
 import {
   CreateBucketCommand,
@@ -20,6 +21,13 @@ export type PersistedArtifact = {
   url: string;
 };
 
+export type ArtifactDownload = {
+  body: unknown;
+  contentLength?: number;
+  contentType: string;
+  filename: string;
+};
+
 type PersistArtifactInput = {
   body: string | Uint8Array;
   contentType: string;
@@ -28,6 +36,7 @@ type PersistArtifactInput = {
 };
 
 type ArtifactStoreBackend = {
+  getDownload: (key: string) => Promise<ArtifactDownload | undefined>;
   persist: (
     input: PersistArtifactInput,
   ) => Promise<PersistedArtifact | undefined>;
@@ -103,8 +112,40 @@ const isAlreadyExistsError = (error: unknown): boolean => {
   return code === "BucketAlreadyOwnedByYou" || code === "BucketAlreadyExists";
 };
 
+const filenameFromKey = (key: string): string => {
+  const value = basename(key).trim();
+  return value || "artifact.bin";
+};
+
+export const encodeArtifactToken = (key: string): string =>
+  Buffer.from(key, "utf8").toString("base64url");
+
+export const decodeArtifactToken = (token: string): string | undefined => {
+  const normalized = token.trim();
+  if (!normalized) {
+    return undefined;
+  }
+
+  try {
+    const decoded = Buffer.from(normalized, "base64url")
+      .toString("utf8")
+      .trim();
+    if (decoded) {
+      return decoded;
+    }
+  } catch {
+    // fall through to raw token handling
+  }
+
+  return normalized;
+};
+
 class NoopArtifactStore implements ArtifactStoreBackend {
   async persist(_input: PersistArtifactInput): Promise<undefined> {
+    return undefined;
+  }
+
+  async getDownload(_key: string): Promise<undefined> {
     return undefined;
   }
 }
@@ -200,6 +241,36 @@ class S3ArtifactStore implements ArtifactStoreBackend {
       storage: "s3",
       url,
     };
+  }
+
+  async getDownload(key: string): Promise<ArtifactDownload | undefined> {
+    await this.ensureBucket();
+
+    try {
+      const response = await this.client.send(
+        new GetObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+        }),
+      );
+      if (!response.Body) {
+        return undefined;
+      }
+      return {
+        body: response.Body,
+        contentLength:
+          typeof response.ContentLength === "number"
+            ? response.ContentLength
+            : undefined,
+        contentType: response.ContentType || "application/octet-stream",
+        filename: filenameFromKey(key),
+      };
+    } catch (error) {
+      if (isMissingBucketError(error)) {
+        return undefined;
+      }
+      throw error;
+    }
   }
 
   private async ensureBucket(): Promise<void> {

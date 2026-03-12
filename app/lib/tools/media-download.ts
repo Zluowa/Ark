@@ -27,6 +27,8 @@ import {
 } from "@/lib/server/media-provider-config";
 import {
   VidBeeClient,
+  type VidBeeDownloadTask,
+  type VidBeeRemoteFile,
   type VidBeeVideoFormat,
   type VidBeeVideoInfo,
 } from "@/lib/server/vidbee-client";
@@ -1846,6 +1848,47 @@ const selectVidBeeFormat = (
   return undefined;
 };
 
+const extensionFromFilename = (
+  value: string | undefined,
+  fallback: string,
+): string => {
+  const match = value?.trim().match(/\.([a-z0-9]+)$/i);
+  return match?.[1]?.toLowerCase() || fallback;
+};
+
+const materializeVidBeeDownloadFile = (
+  remoteFile: VidBeeRemoteFile,
+  fallbackExtension: string,
+): string => {
+  const tempPath = tempFile(
+    extensionFromFilename(remoteFile.filename, fallbackExtension),
+  );
+  writeFileSync(tempPath, remoteFile.body);
+  return tempPath;
+};
+
+const resolveVidBeeDownloadPath = async (
+  client: VidBeeClient,
+  task: VidBeeDownloadTask,
+  fallbackExtension: string,
+): Promise<string> => {
+  const localPath = client.resolveLocalFilePath(task);
+  if (localPath && existsSync(localPath)) {
+    return localPath;
+  }
+
+  const remoteFile = await client.downloadRemoteFile(task);
+  if (remoteFile) {
+    return materializeVidBeeDownloadFile(remoteFile, fallbackExtension);
+  }
+
+  throw createMediaError(
+    "download_failed",
+    "VidBee completed the task but Ark cannot access the downloaded file. Configure a shared download directory or OMNIAGENT_VIDBEE_FILE_BRIDGE_URL.",
+    "vidbee",
+  );
+};
+
 const runLegacyInfo = async (
   url: string,
   params: Record<string, unknown>,
@@ -1986,23 +2029,19 @@ const runVidBeeDownload = async (
       );
     }
 
-    const localPath = client.resolveLocalFilePath(task);
-    if (!localPath || !existsSync(localPath)) {
-      throw createMediaError(
-        "download_failed",
-        "VidBee completed the task but Ark cannot access the downloaded file. Ensure both services share the same download directory.",
-        "vidbee",
-      );
-    }
-
     const finalFormat = task.selectedFormat ?? selectedFormat;
     const fallbackFormat =
       kind === "audio"
         ? requestedAudioFormat
         : (finalFormat?.ext ?? getStringParam(params, ["format"]) ?? "mp4");
+    const downloadPath = await resolveVidBeeDownloadPath(
+      client,
+      task,
+      fallbackFormat,
+    );
 
     return {
-      path: localPath,
+      path: downloadPath,
       title: task.title?.trim() || normalizedInfo.title,
       duration: toPositiveInt(task.duration, normalizedInfo.duration),
       platform: normalizedInfo.platform,

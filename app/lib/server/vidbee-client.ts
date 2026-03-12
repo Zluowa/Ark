@@ -86,6 +86,13 @@ export type VidBeeDownloadTask = {
   ytDlpLog?: string;
 };
 
+export type VidBeeRemoteFile = {
+  body: Buffer;
+  contentLength?: number;
+  contentType: string;
+  filename: string;
+};
+
 type RpcSuccess<T> = {
   meta?: unknown;
   json: T;
@@ -128,6 +135,24 @@ const terminalStatuses = new Set<VidBeeDownloadStatus>([
   "cancelled",
 ]);
 
+const decodeContentDispositionFilename = (
+  value: string | null,
+): string | undefined => {
+  if (!value) {
+    return undefined;
+  }
+  const utf8Match = value.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1]);
+    } catch {
+      return utf8Match[1];
+    }
+  }
+  const plainMatch = value.match(/filename="?([^";]+)"?/i);
+  return plainMatch?.[1]?.trim() || undefined;
+};
+
 export class VidBeeClient {
   constructor(private readonly config: VidBeeConfig) {}
 
@@ -168,11 +193,7 @@ export class VidBeeClient {
         const rawText = await response.text();
         if (!response.ok) {
           errors.push(
-            candidate.method +
-              " " +
-              response.status +
-              ": " +
-              (rawText.slice(0, 500) || response.statusText),
+            `${candidate.method} ${response.status}: ${rawText.slice(0, 500) || response.statusText}`,
           );
           continue;
         }
@@ -183,9 +204,7 @@ export class VidBeeClient {
           return unwrapRpcPayload<T>(JSON.parse(rawText));
         } catch (error) {
           errors.push(
-            candidate.method +
-              " invalid_json: " +
-              (error instanceof Error ? error.message : String(error)),
+            `${candidate.method} invalid_json: ${error instanceof Error ? error.message : String(error)}`,
           );
         }
       } catch (error) {
@@ -194,12 +213,10 @@ export class VidBeeClient {
     }
 
     throw new Error(
-      (
-        "vidbee_rpc_failed: " +
-        routePath +
-        " request failed. " +
-        errors.join(" | ")
-      ).slice(0, 2000),
+      `vidbee_rpc_failed: ${routePath} request failed. ${errors.join(" | ")}`.slice(
+        0,
+        2000,
+      ),
     );
   }
 
@@ -276,11 +293,7 @@ export class VidBeeClient {
     }
 
     throw new Error(
-      "vidbee_timeout: download " +
-        id +
-        " did not finish within " +
-        this.config.maxWaitMs +
-        "ms.",
+      `vidbee_timeout: download ${id} did not finish within ${this.config.maxWaitMs}ms.`,
     );
   }
 
@@ -308,5 +321,61 @@ export class VidBeeClient {
     }
 
     return Array.from(candidates)[0];
+  }
+
+  async downloadRemoteFile(
+    task: VidBeeDownloadTask,
+  ): Promise<VidBeeRemoteFile | undefined> {
+    const fileBridgeUrl = this.config.fileBridgeUrl?.trim();
+    if (!fileBridgeUrl) {
+      return undefined;
+    }
+
+    const headers: Record<string, string> = {
+      "content-type": "application/json",
+    };
+    const bridgeApiKey =
+      this.config.fileBridgeApiKey?.trim() || this.config.apiKey?.trim();
+    if (bridgeApiKey) {
+      headers.authorization = `Bearer ${bridgeApiKey}`;
+    }
+
+    const resolvedPath = this.resolveLocalFilePath(task);
+    const response = await fetch(fileBridgeUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        downloadPath: task.downloadPath,
+        filePath: resolvedPath,
+        savedFileName: task.savedFileName,
+        taskId: task.id,
+        taskUrl: task.url,
+      }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(this.config.requestTimeoutMs),
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(
+        `vidbee_file_bridge_failed: ${response.status} ${body.slice(0, 500)}`,
+      );
+    }
+
+    const bytes = Buffer.from(await response.arrayBuffer());
+    const filename =
+      decodeContentDispositionFilename(
+        response.headers.get("content-disposition"),
+      ) ||
+      task.savedFileName?.trim() ||
+      `${task.id}.${task.selectedFormat?.ext || (task.type === "audio" ? "mp3" : "mp4")}`;
+
+    return {
+      body: bytes,
+      contentLength: bytes.byteLength,
+      contentType:
+        response.headers.get("content-type") || "application/octet-stream",
+      filename,
+    };
   }
 }

@@ -17,6 +17,8 @@ export type VidBeeRuntimeSettings = {
 export type VidBeeConfig = {
   apiKey?: string;
   baseUrl?: string;
+  fileBridgeApiKey?: string;
+  fileBridgeUrl?: string;
   maxWaitMs: number;
   pollIntervalMs: number;
   requestTimeoutMs: number;
@@ -132,6 +134,10 @@ export const getMediaProviderConfig = (): MediaProviderConfig => {
     vidbee: {
       apiKey: normalize(process.env.OMNIAGENT_VIDBEE_API_KEY),
       baseUrl: vidbeeBaseUrl ? stripTrailingSlash(vidbeeBaseUrl) : undefined,
+      fileBridgeApiKey: normalize(
+        process.env.OMNIAGENT_VIDBEE_FILE_BRIDGE_API_KEY,
+      ),
+      fileBridgeUrl: normalize(process.env.OMNIAGENT_VIDBEE_FILE_BRIDGE_URL),
       maxWaitMs: parsePositiveInt(
         process.env.OMNIAGENT_VIDBEE_MAX_WAIT_MS,
         90_000,
