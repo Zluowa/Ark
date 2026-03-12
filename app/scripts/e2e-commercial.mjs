@@ -4,6 +4,28 @@ const appBaseUrl =
   process.env.OMNIAGENT_APP_BASE_URL ?? "http://127.0.0.1:3010";
 const controlBaseUrl = process.env.OMNIAGENT_CONTROL_BASE_URL ?? appBaseUrl;
 
+const PREFERRED_TOOLS = [
+  {
+    id: "convert.json_format",
+    params: {
+      input: '{"hello":"world"}',
+      mode: "pretty",
+    },
+  },
+  {
+    id: "convert.json_yaml",
+    params: {
+      input: '{"hello":"world"}',
+    },
+  },
+  {
+    id: "convert.yaml_json",
+    params: {
+      input: "hello: world\n",
+    },
+  },
+];
+
 const sleep = async (ms) => {
   await new Promise((resolve) => setTimeout(resolve, ms));
 };
@@ -35,27 +57,8 @@ const fetchJson = async (url, options, label) => {
 };
 
 const pickTool = async () => {
-  const utilityPayload = await fetchJson(
-    `${appBaseUrl}/api/v1/tools?q=utility&limit=1`,
-    {
-      method: "GET",
-      headers: withAuthHeaders(),
-      cache: "no-store",
-    },
-    "GET /api/v1/tools?q=utility",
-  );
-  const utilityToolId = utilityPayload?.tools?.[0]?.id;
-  if (typeof utilityToolId === "string" && utilityToolId.trim()) {
-    return {
-      id: utilityToolId.trim(),
-      params: {
-        text: '{"hello":"world"}',
-      },
-    };
-  }
-
   const payload = await fetchJson(
-    `${appBaseUrl}/api/v1/tools?limit=1`,
+    `${appBaseUrl}/api/v1/tools?limit=200`,
     {
       method: "GET",
       headers: withAuthHeaders(),
@@ -63,10 +66,26 @@ const pickTool = async () => {
     },
     "GET /api/v1/tools",
   );
-  const toolId = payload?.tools?.[0]?.id;
+
+  const available = new Set(
+    (Array.isArray(payload?.tools) ? payload.tools : [])
+      .map((tool) => (typeof tool?.id === "string" ? tool.id.trim() : ""))
+      .filter(Boolean),
+  );
+
+  for (const tool of PREFERRED_TOOLS) {
+    if (available.has(tool.id)) {
+      return tool;
+    }
+  }
+
+  const toolId = payload?.tools?.find(
+    (tool) => typeof tool?.id === "string" && tool.id.trim(),
+  )?.id;
   if (typeof toolId !== "string" || !toolId.trim()) {
     throw new Error("No tool found in /api/v1/tools.");
   }
+
   return {
     id: toolId.trim(),
     params: {},
