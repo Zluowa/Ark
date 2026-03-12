@@ -5,28 +5,257 @@
 use crate::core::command::Command;
 use crate::core::music_client::{self, MusicSearchResult};
 use crate::core::types::{AiState, ToolStatus};
+use std::collections::HashMap;
 use std::io::BufRead;
 use std::sync::mpsc;
 use std::time::Duration;
 
-const CHAT_URL: &str = "http://127.0.0.1:3010/api/chat";
+#[derive(Clone, Copy)]
+enum StreamCommandTarget {
+    Output,
+    ClipChat,
+}
+
+fn chat_url() -> String {
+    crate::core::backend::load_backend_config().endpoint("/api/chat")
+}
+
+pub fn request_text_completion_with_system(
+    system: &str,
+    user_message: &str,
+) -> Result<String, String> {
+    let mut body = serde_json::json!({
+        "messages": [{
+            "id": "island-clip-msg",
+            "role": "user",
+            "content": user_message,
+            "parts": [{ "type": "text", "text": user_message }]
+        }],
+        "source": "island",
+        "disableTools": true
+    });
+
+    if let Some(map) = body.as_object_mut() {
+        let trimmed = system.trim();
+        if !trimmed.is_empty() {
+            map.insert(
+                "system".to_string(),
+                serde_json::Value::String(trimmed.to_string()),
+            );
+        }
+    }
+
+    let agent = ureq::AgentBuilder::new()
+        .try_proxy_from_env(false)
+        .timeout_connect(Duration::from_secs(10))
+        .timeout(Duration::from_secs(90))
+        .build();
+
+    let chat_url = chat_url();
+    let backend = crate::core::backend::load_backend_config();
+    let resp = backend
+        .apply_auth_for_url(
+            agent.post(&chat_url)
+        .set("Content-Type", "application/json")
+                .set("x-omni-source", "island"),
+            &chat_url,
+        )
+        .send_string(&body.to_string())
+        .map_err(friendly_transport_error)?;
+
+    let reader = std::io::BufReader::new(resp.into_reader());
+    collect_chat_text_stream(reader)
+}
 
 pub fn send_chat(message: String, tx: mpsc::Sender<Command>) {
-    std::thread::spawn(move || {
-        let _ = tx.send(Command::AiUpdate {
-            state: AiState::Thinking,
-            snippet: None,
-        });
+    let body = serde_json::json!({
+        "messages": [{
+            "id": "island-msg",
+            "role": "user",
+            "content": &message,
+            "parts": [{ "type": "text", "text": &message }]
+        }],
+        "source": "island"
+    });
+    stream_chat_request(body, message, tx, StreamCommandTarget::Output, true);
+}
 
-        let body = serde_json::json!({
+pub fn send_clip_text_chat(
+    context: String,
+    clip_link_url: Option<String>,
+    user_message: String,
+    tx: mpsc::Sender<Command>,
+) {
+    let body = build_clip_text_chat_body(&context, clip_link_url.as_deref(), &user_message);
+    stream_chat_request(body, user_message, tx, StreamCommandTarget::ClipChat, false);
+}
+
+fn build_clip_text_chat_body(
+    context: &str,
+    clip_link_url: Option<&str>,
+    user_message: &str,
+) -> serde_json::Value {
+    let trimmed_context = context.trim();
+    let trimmed_user = user_message.trim();
+    let media_url = clip_link_url
+        .map(str::trim)
+        .filter(|url| !url.is_empty())
+        .filter(|url| is_supported_media_link(url));
+
+    if let Some(url) = media_url.filter(|_| user_requests_media_tool(trimmed_user)) {
+        let combined = format!(
+            "Copied text:\n{trimmed_context}\n\nMedia link:\n{url}\n\nUser request:\n{trimmed_user}"
+        );
+        return serde_json::json!({
             "messages": [{
-                "id": "island-msg",
+                "id": "island-clip-text-msg",
                 "role": "user",
-                "content": &message,
-                "parts": [{ "type": "text", "text": &message }]
+                "content": &combined,
+                "parts": [{ "type": "text", "text": &combined }]
             }],
-            "source": "island"
+            "source": "island",
+            "system": "You are OmniAgent. The user copied a media link and is asking for a concrete media action. When the request is about downloading the video, audio, subtitles, or viewing media info, use the appropriate media tool. Always reply in the user's language."
         });
+    }
+
+    let system = format!(
+        "You are a helpful assistant. The user copied this text:\n\n{trimmed_context}\n\nAnswer questions about it. Reply in the user's language."
+    );
+    serde_json::json!({
+        "messages": [{
+            "id": "island-clip-text-msg",
+            "role": "user",
+            "content": trimmed_user,
+            "parts": [{ "type": "text", "text": trimmed_user }]
+        }],
+        "source": "island",
+        "system": system,
+        "disableTools": true,
+        "skipDirectToolIntent": true
+    })
+}
+
+fn is_supported_media_link(url: &str) -> bool {
+    let lower = url.trim().to_ascii_lowercase();
+    [
+        "bilibili.com",
+        "b23.tv",
+        "douyin.com",
+        "iesdouyin.com",
+        "youtube.com",
+        "youtu.be",
+        "xiaohongshu.com",
+        "xhslink.com",
+    ]
+    .iter()
+    .any(|domain| lower.contains(domain))
+}
+
+fn user_requests_media_tool(message: &str) -> bool {
+    let lower = message.trim().to_ascii_lowercase();
+    if lower.is_empty() {
+        return false;
+    }
+
+    [
+        "download",
+        "save",
+        "video info",
+        "video details",
+        "metadata",
+        "subtitle",
+        "captions",
+        "audio",
+        "mp3",
+        "下载",
+        "保存",
+        "另存",
+        "视频信息",
+        "视频详情",
+        "查看信息",
+        "字幕",
+        "提取字幕",
+        "下载字幕",
+        "音频",
+        "提取音频",
+        "下载音频",
+    ]
+    .iter()
+    .any(|needle| lower.contains(needle))
+}
+
+pub fn send_clip_image_analysis(image_data_url: String, tx: mpsc::Sender<Command>) {
+    let prompt = "请简要分析这张图片。如果没有明确的用户语言信号，默认使用简体中文。";
+    let body = serde_json::json!({
+        "messages": [{
+            "id": "island-clip-image-analysis",
+            "role": "user",
+            "content": prompt,
+            "parts": [
+                { "type": "text", "text": prompt },
+                {
+                    "type": "file",
+                    "mediaType": "image/png",
+                    "filename": "clipboard-image.png",
+                    "url": image_data_url
+                }
+            ]
+        }],
+        "source": "island",
+        "system": "You are a vision assistant. Analyze the attached image and reply concisely in the user's language. If the user's language is ambiguous or not explicit, default to Simplified Chinese. Mention the main subject, scene, style, and any obvious possible edits.",
+        "disableTools": true,
+        "skipDirectToolIntent": true
+    });
+    stream_chat_request(
+        body,
+        prompt.to_string(),
+        tx,
+        StreamCommandTarget::Output,
+        false,
+    );
+}
+
+pub fn send_clip_image_chat(
+    image_data_url: String,
+    user_message: String,
+    tx: mpsc::Sender<Command>,
+) {
+    let body = serde_json::json!({
+        "messages": [{
+            "id": "island-clip-image-chat",
+            "role": "user",
+            "content": &user_message,
+            "parts": [
+                { "type": "text", "text": &user_message },
+                {
+                    "type": "file",
+                    "mediaType": "image/png",
+                    "filename": "clipboard-image.png",
+                    "url": image_data_url
+                }
+            ]
+        }],
+        "source": "island",
+        "system": "You are OmniAgent. The user attached the current working image. Always reply in the user's language. If the user's language is ambiguous or not explicit, default to Simplified Chinese. If the user asks about the image, answer directly from the image. If the user asks to modify the image, choose the most appropriate image tool yourself. Prefer precise edit tools for localized cleanup and enhancement. Use image generation with the attached image as reference when the request is broader restyling, redraw, or image-to-image transformation. When an image tool needs file_url or reference_image_url, the attached image will be supplied automatically if you omit it.",
+        "skipDirectToolIntent": true
+    });
+    stream_chat_request(body, user_message, tx, StreamCommandTarget::ClipChat, false);
+}
+
+fn stream_chat_request(
+    body: serde_json::Value,
+    user_message: String,
+    tx: mpsc::Sender<Command>,
+    target: StreamCommandTarget,
+    allow_music_fallback: bool,
+) {
+    std::thread::spawn(move || {
+        if matches!(target, StreamCommandTarget::Output) {
+            let _ = tx.send(Command::AiUpdate {
+                state: AiState::Thinking,
+                snippet: None,
+            });
+        }
 
         let agent = ureq::AgentBuilder::new()
             .try_proxy_from_env(false)
@@ -34,10 +263,15 @@ pub fn send_chat(message: String, tx: mpsc::Sender<Command>) {
             .timeout(Duration::from_secs(90))
             .build();
 
-        let resp = match agent
-            .post(CHAT_URL)
+        let chat_url = chat_url();
+        let backend = crate::core::backend::load_backend_config();
+        let resp = match backend
+            .apply_auth_for_url(
+                agent.post(&chat_url)
             .set("Content-Type", "application/json")
-            .set("x-omni-source", "island")
+                    .set("x-omni-source", "island"),
+                &chat_url,
+            )
             .send_string(&body.to_string())
         {
             Ok(r) => r,
@@ -51,23 +285,28 @@ pub fn send_chat(message: String, tx: mpsc::Sender<Command>) {
             }
         };
 
-        // Parse Vercel AI SDK v6 SSE stream.
         let reader = std::io::BufReader::new(resp.into_reader());
         let mut full_text = String::new();
         let mut saw_finish = false;
         let mut music_tool_triggered = false;
         let mut file_output_emitted = false;
         let mut tool_output_seen = false;
-        let user_music_query = parse_music_query_from_user_message(&message);
+        let mut tool_call_names = HashMap::new();
+        let user_music_query = if allow_music_fallback {
+            parse_music_query_from_user_message(&user_message)
+        } else {
+            None
+        };
 
         for line in reader.lines().map_while(Result::ok) {
             let data = match line.strip_prefix("data: ") {
                 Some(d) => d,
                 None => continue,
             };
-            let Ok(obj) = serde_json::from_str::<serde_json::Value>(data) else {
+            let Ok(mut obj) = serde_json::from_str::<serde_json::Value>(data) else {
                 continue;
             };
+            hydrate_tool_name(&mut obj, &mut tool_call_names);
 
             let evt_type = obj.get("type").and_then(|v| v.as_str());
             let tool_start_event = matches!(
@@ -105,10 +344,7 @@ pub fn send_chat(message: String, tx: mpsc::Sender<Command>) {
                         .and_then(|v| v.as_str())
                     {
                         full_text.push_str(delta);
-                        let _ = tx.send(Command::AiUpdate {
-                            state: AiState::Streaming,
-                            snippet: Some(full_text.clone()),
-                        });
+                        emit_stream_text(&tx, target, full_text.clone());
                     }
                 }
                 Some("finish") => {
@@ -133,15 +369,9 @@ pub fn send_chat(message: String, tx: mpsc::Sender<Command>) {
                             || music_tool_triggered
                             || full_text.trim().is_empty()
                         {
-                            let _ = tx.send(Command::AiUpdate {
-                                state: AiState::Idle,
-                                snippet: None,
-                            });
+                            emit_idle(&tx, target);
                         } else {
-                            let _ = tx.send(Command::AiUpdate {
-                                state: AiState::Complete,
-                                snippet: Some(full_text.clone()),
-                            });
+                            emit_complete(&tx, target, full_text.clone());
                         }
                         return;
                     }
@@ -160,17 +390,11 @@ pub fn send_chat(message: String, tx: mpsc::Sender<Command>) {
                                 ttl_ms: 1200,
                             });
                             music_client::search(query, tx.clone());
-                            let _ = tx.send(Command::AiUpdate {
-                                state: AiState::Idle,
-                                snippet: None,
-                            });
+                            emit_idle(&tx, target);
                             return;
                         }
                     }
-                    let _ = tx.send(Command::AiUpdate {
-                        state: AiState::Error,
-                        snippet: Some(msg.to_string()),
-                    });
+                    emit_error(&tx, target, msg.to_string());
                     return;
                 }
                 Some("start" | "text-start" | "text-end" | "reasoning") => {}
@@ -179,10 +403,7 @@ pub fn send_chat(message: String, tx: mpsc::Sender<Command>) {
         }
 
         if file_output_emitted {
-            let _ = tx.send(Command::AiUpdate {
-                state: AiState::Idle,
-                snippet: None,
-            });
+            emit_idle(&tx, target);
             return;
         }
 
@@ -195,10 +416,7 @@ pub fn send_chat(message: String, tx: mpsc::Sender<Command>) {
                         ttl_ms: 1000,
                     });
                     music_client::search(query, tx.clone());
-                    let _ = tx.send(Command::AiUpdate {
-                        state: AiState::Idle,
-                        snippet: None,
-                    });
+                    emit_idle(&tx, target);
                     return;
                 }
             }
@@ -206,10 +424,7 @@ pub fn send_chat(message: String, tx: mpsc::Sender<Command>) {
 
         if full_text.trim().is_empty() {
             if music_tool_triggered || file_output_emitted {
-                let _ = tx.send(Command::AiUpdate {
-                    state: AiState::Idle,
-                    snippet: None,
-                });
+                emit_idle(&tx, target);
                 return;
             }
             let message = if saw_finish {
@@ -217,26 +432,77 @@ pub fn send_chat(message: String, tx: mpsc::Sender<Command>) {
             } else {
                 "Chat backend timed out or has no response".to_string()
             };
-            let _ = tx.send(Command::AiUpdate {
-                state: AiState::Error,
-                snippet: Some(message),
-            });
+            emit_error(&tx, target, message);
             return;
         }
 
         if music_tool_triggered || file_output_emitted {
-            let _ = tx.send(Command::AiUpdate {
-                state: AiState::Idle,
-                snippet: None,
-            });
+            emit_idle(&tx, target);
             return;
         }
 
-        let _ = tx.send(Command::AiUpdate {
-            state: AiState::Complete,
-            snippet: Some(full_text),
-        });
+        emit_complete(&tx, target, full_text);
     });
+}
+
+fn emit_stream_text(tx: &mpsc::Sender<Command>, target: StreamCommandTarget, text: String) {
+    match target {
+        StreamCommandTarget::Output => {
+            let _ = tx.send(Command::AiUpdate {
+                state: AiState::Streaming,
+                snippet: Some(text),
+            });
+        }
+        StreamCommandTarget::ClipChat => {
+            let _ = tx.send(Command::ChatResponse {
+                text,
+                streaming: true,
+            });
+        }
+    }
+}
+
+fn emit_complete(tx: &mpsc::Sender<Command>, target: StreamCommandTarget, text: String) {
+    match target {
+        StreamCommandTarget::Output => {
+            let _ = tx.send(Command::AiUpdate {
+                state: AiState::Complete,
+                snippet: Some(text),
+            });
+        }
+        StreamCommandTarget::ClipChat => {
+            let _ = tx.send(Command::ChatResponse {
+                text,
+                streaming: true,
+            });
+        }
+    }
+}
+
+fn emit_error(tx: &mpsc::Sender<Command>, target: StreamCommandTarget, text: String) {
+    match target {
+        StreamCommandTarget::Output => {
+            let _ = tx.send(Command::AiUpdate {
+                state: AiState::Error,
+                snippet: Some(text),
+            });
+        }
+        StreamCommandTarget::ClipChat => {
+            let _ = tx.send(Command::ChatResponse {
+                text,
+                streaming: true,
+            });
+        }
+    }
+}
+
+fn emit_idle(tx: &mpsc::Sender<Command>, target: StreamCommandTarget) {
+    if matches!(target, StreamCommandTarget::Output) {
+        let _ = tx.send(Command::AiUpdate {
+            state: AiState::Idle,
+            snippet: None,
+        });
+    }
 }
 
 fn maybe_trigger_music_search_from_tool(
@@ -359,6 +625,33 @@ fn notify_tool_event(evt: &serde_json::Value, tx: &mpsc::Sender<Command>, starti
     });
 }
 
+fn hydrate_tool_name(evt: &mut serde_json::Value, tool_call_names: &mut HashMap<String, String>) {
+    let tool_call_id = evt
+        .get("toolCallId")
+        .or_else(|| evt.get("tool_call_id"))
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned);
+
+    if let Some(name) = extract_tool_name(evt) {
+        if let Some(tool_call_id) = tool_call_id {
+            tool_call_names.insert(tool_call_id, name);
+        }
+        return;
+    }
+
+    let Some(tool_call_id) = tool_call_id else {
+        return;
+    };
+    let Some(tool_name) = tool_call_names.get(&tool_call_id).cloned() else {
+        return;
+    };
+    if let Some(obj) = evt.as_object_mut() {
+        obj.insert("toolName".to_string(), serde_json::Value::String(tool_name));
+    }
+}
+
 fn maybe_emit_file_from_tool(
     evt: &serde_json::Value,
     tx: &mpsc::Sender<Command>,
@@ -376,11 +669,13 @@ fn maybe_emit_file_from_tool(
     }
 
     let tool_name = extract_tool_name(evt).unwrap_or_else(|| "tool.output".to_string());
+    let is_image_output = is_image_url(&url) || is_image_tool_name(&tool_name);
+    let is_video_output = is_video_tool_name(&tool_name) || is_video_url(&url);
     let file_name = infer_file_name(evt, &url, &tool_name);
     let label = infer_file_label(&tool_name, &url);
     let aspect_ratio = extract_aspect_ratio(evt);
     let preview_url = extract_preview_url(evt);
-    let editor_url = if is_image_url(&url) {
+    let editor_url = if is_image_output {
         Some(build_iopaint_studio_url(
             preview_url.as_deref().unwrap_or(url.as_str()),
         ))
@@ -399,9 +694,9 @@ fn maybe_emit_file_from_tool(
         detail_text,
     });
     let _ = tx.send(Command::ShowNotification {
-        title: if is_image_url(&url) {
+        title: if is_image_output {
             "Image ready".to_string()
-        } else if is_video_tool_name(&tool_name) || is_video_url(&url) {
+        } else if is_video_output {
             "Video ready".to_string()
         } else {
             "File ready".to_string()
@@ -498,6 +793,7 @@ fn looks_like_file_url(url: &str) -> bool {
     lower.starts_with("http://")
         || lower.starts_with("https://")
         || lower.starts_with("/api/v1/files/")
+        || lower.starts_with("/api/v1/artifacts/")
 }
 
 fn is_image_url(url: &str) -> bool {
@@ -661,7 +957,8 @@ fn extract_preview_url(evt: &serde_json::Value) -> Option<String> {
 
 fn build_iopaint_studio_url(source: &str) -> String {
     let encoded = urlencoding::encode(source);
-    format!("http://127.0.0.1:3010/dashboard/tools/image.iopaint_studio?source={encoded}")
+    crate::core::backend::load_backend_config()
+        .dashboard_tool_url("image.iopaint_studio", &format!("source={encoded}"))
 }
 
 fn extract_detail_text(evt: &serde_json::Value) -> Option<String> {
@@ -712,6 +1009,112 @@ mod tests {
     #[test]
     fn normalized_video_tool_name_is_detected() {
         assert!(is_video_tool_name("media.download.video"));
+    }
+
+    #[test]
+    fn artifact_route_is_treated_as_file_url() {
+        assert!(looks_like_file_url("/api/v1/artifacts/demo-token"));
+    }
+
+    #[test]
+    fn clip_text_chat_stays_text_only_for_generic_follow_up() {
+        let body = build_clip_text_chat_body(
+            "https://www.bilibili.com/video/BV1xx411c7mD",
+            Some("https://www.bilibili.com/video/BV1xx411c7mD"),
+            "这个视频主要讲了什么？",
+        );
+
+        assert_eq!(body.get("disableTools").and_then(|value| value.as_bool()), Some(true));
+        assert_eq!(
+            body.get("skipDirectToolIntent")
+                .and_then(|value| value.as_bool()),
+            Some(true)
+        );
+        assert_eq!(
+            body.get("messages")
+                .and_then(|value| value.as_array())
+                .and_then(|items| items.first())
+                .and_then(|item| item.get("content"))
+                .and_then(|value| value.as_str()),
+            Some("这个视频主要讲了什么？")
+        );
+    }
+
+    #[test]
+    fn clip_text_chat_enables_media_tools_for_explicit_download_request() {
+        let body = build_clip_text_chat_body(
+            "https://www.bilibili.com/video/BV1xx411c7mD",
+            Some("https://www.bilibili.com/video/BV1xx411c7mD"),
+            "下载这个视频",
+        );
+
+        assert!(body.get("disableTools").is_none());
+        assert!(body.get("skipDirectToolIntent").is_none());
+        let content = body
+            .get("messages")
+            .and_then(|value| value.as_array())
+            .and_then(|items| items.first())
+            .and_then(|item| item.get("content"))
+            .and_then(|value| value.as_str())
+            .unwrap_or_default();
+        assert!(content.contains("https://www.bilibili.com/video/BV1xx411c7mD"));
+        assert!(content.contains("下载这个视频"));
+    }
+
+    #[test]
+    fn hydrate_tool_name_restores_image_tool_name_for_output_event() {
+        let mut tool_call_names = HashMap::new();
+        let mut start_evt = serde_json::json!({
+            "type": "tool-input-start",
+            "toolCallId": "call-1",
+            "toolName": "generate_image"
+        });
+        hydrate_tool_name(&mut start_evt, &mut tool_call_names);
+
+        let mut output_evt = serde_json::json!({
+            "type": "tool-output-available",
+            "toolCallId": "call-1",
+            "output": {
+                "output_file_url": "/api/v1/files/abc123"
+            }
+        });
+        hydrate_tool_name(&mut output_evt, &mut tool_call_names);
+
+        assert_eq!(
+            extract_tool_name(&output_evt).as_deref(),
+            Some("generate.image")
+        );
+        assert_eq!(
+            infer_file_name(
+                &output_evt,
+                "/api/v1/files/abc123",
+                extract_tool_name(&output_evt)
+                    .as_deref()
+                    .unwrap_or("tool.output"),
+            ),
+            "generate_image_output.png"
+        );
+    }
+
+    #[test]
+    fn parse_chat_text_response_collects_sse_text_deltas() {
+        let raw = concat!(
+            "data: {\"type\":\"start\"}\n",
+            "data: {\"type\":\"text-delta\",\"delta\":\"hello\"}\n",
+            "data: {\"type\":\"text-delta\",\"delta\":\" world\"}\n",
+            "data: {\"type\":\"finish\"}\n",
+        );
+
+        let parsed = parse_chat_text_response(raw).expect("parsed text");
+        assert_eq!(parsed, "hello world");
+    }
+
+    #[test]
+    fn parse_chat_text_response_surfaces_sse_error() {
+        let raw = "data: {\"type\":\"error\",\"message\":\"backend failed\"}\n";
+
+        let err = parse_chat_text_response(raw).expect_err("expected error");
+        assert_eq!(err, "backend failed");
     }
 }
 
@@ -1105,7 +1508,7 @@ fn friendly_transport_error(err: ureq::Error) -> String {
                 || lower.contains("dns")
                 || lower.contains("failed to connect")
             {
-                "Backend unavailable: start app service on http://127.0.0.1:3010".to_string()
+                crate::core::backend::load_backend_config().unavailable_message()
             } else {
                 format!("Network error: {msg}")
             }
@@ -1124,4 +1527,92 @@ fn friendly_transport_error(err: ureq::Error) -> String {
             format!("HTTP {code}: request failed")
         }
     }
+}
+
+fn parse_chat_text_response(raw: &str) -> Result<String, String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err("Chat backend timed out or has no response".to_string());
+    }
+    let reader = std::io::BufReader::new(std::io::Cursor::new(trimmed.as_bytes()));
+    match collect_chat_text_stream(reader) {
+        Ok(text) => Ok(text),
+        Err(err) if !trimmed.contains("data: ") => parse_chat_text_response_fallback_json(trimmed),
+        Err(err) => Err(err),
+    }
+}
+
+fn collect_chat_text_stream<R: BufRead>(reader: R) -> Result<String, String> {
+    let mut full_text = String::new();
+    let mut saw_finish = false;
+    let mut saw_sse = false;
+
+    for line in reader.lines().map_while(Result::ok) {
+        let Some(payload) = line.strip_prefix("data: ") else {
+            continue;
+        };
+        let payload = payload.trim();
+        if payload.is_empty() || payload == "[DONE]" {
+            continue;
+        }
+        let Ok(obj) = serde_json::from_str::<serde_json::Value>(payload) else {
+            continue;
+        };
+        saw_sse = true;
+
+        match obj.get("type").and_then(|value| value.as_str()) {
+            Some("text-delta") => {
+                if let Some(delta) = obj
+                    .get("delta")
+                    .or_else(|| obj.get("textDelta"))
+                    .and_then(|value| value.as_str())
+                {
+                    full_text.push_str(delta);
+                }
+            }
+            Some("error") => {
+                let message = obj
+                    .get("errorText")
+                    .or_else(|| obj.get("message"))
+                    .and_then(|value| value.as_str())
+                    .unwrap_or("Unknown error");
+                return Err(message.to_string());
+            }
+            Some("finish") => {
+                saw_finish = true;
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    if !saw_sse {
+        return Err("Chat backend timed out or has no response".to_string());
+    }
+
+    if full_text.trim().is_empty() {
+        if saw_finish {
+            return Err("Chat backend returned empty response".to_string());
+        }
+        return Err("Chat backend timed out or has no response".to_string());
+    }
+
+    Ok(full_text.trim().to_string())
+}
+
+fn parse_chat_text_response_fallback_json(raw: &str) -> Result<String, String> {
+    let trimmed = raw.trim();
+    if trimmed.starts_with('{') {
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(trimmed) {
+            if let Some(message) = value
+                .get("error")
+                .and_then(|entry| entry.get("message"))
+                .and_then(|entry| entry.as_str())
+            {
+                return Err(message.to_string());
+            }
+        }
+    }
+
+    Ok(trimmed.to_string())
 }

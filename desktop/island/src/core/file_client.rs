@@ -15,9 +15,6 @@ use serde_json::{json, Value};
 use crate::core::command::Command;
 use crate::core::types::ToolStatus;
 
-const API_ORIGIN: &str = "http://127.0.0.1:3010";
-const FILES_ENDPOINT: &str = "http://127.0.0.1:3010/api/v1/files";
-const EXECUTE_ENDPOINT: &str = "http://127.0.0.1:3010/api/v1/execute";
 const EXECUTE_TIMEOUT_SECS: u64 = 120;
 const EXECUTE_TIMEOUT_IMAGE_SECS: u64 = 300;
 const MAX_INLINE_REFERENCE_BYTES: usize = 512 * 1024;
@@ -712,11 +709,16 @@ fn upload_files(paths: &[String]) -> Result<Vec<UploadedFile>, String> {
         .timeout(Duration::from_secs(90))
         .build();
 
-    let response = agent
-        .post(FILES_ENDPOINT)
+    let backend = crate::core::backend::load_backend_config();
+    let files_endpoint = backend.endpoint("/api/v1/files");
+    let response = backend
+        .apply_auth_for_url(
+            agent.post(&files_endpoint)
         .set(
             "Content-Type",
             &format!("multipart/form-data; boundary={boundary}"),
+            ),
+            &files_endpoint,
         )
         .send_bytes(&body)
         .map_err(format_ureq_error)?;
@@ -802,9 +804,15 @@ fn execute_plan_once(plan: &ExecutionPlan, timeout_secs: u64) -> Result<Value, S
         .timeout(Duration::from_secs(timeout_secs))
         .build();
 
-    let response = agent
-        .post(EXECUTE_ENDPOINT)
+    let backend = crate::core::backend::load_backend_config();
+    let execute_endpoint = backend.endpoint("/api/v1/execute");
+    let response = backend
+        .apply_auth_for_url(
+            agent.post(&execute_endpoint)
         .set("Content-Type", "application/json")
+            ,
+            &execute_endpoint,
+        )
         .send_string(&payload.to_string())
         .map_err(format_ureq_error)?;
 
@@ -1085,7 +1093,10 @@ fn choose_single_file_plan(
         }));
     }
 
-    if matches!(ext, "txt" | "json" | "yaml" | "yml" | "csv" | "md" | "markdown") {
+    if matches!(
+        ext,
+        "txt" | "json" | "yaml" | "yml" | "csv" | "md" | "markdown"
+    ) {
         if is_generic_file_compress_instruction(instruction) {
             return Ok(Some(ExecutionPlan {
                 tool: "file.compress".to_string(),
@@ -1455,7 +1466,11 @@ fn download_file(url: &str, target: &Path) -> Result<(), String> {
         .timeout_connect(Duration::from_secs(10))
         .timeout(Duration::from_secs(120))
         .build();
-    let response = agent.get(&full_url).call().map_err(format_ureq_error)?;
+    let backend = crate::core::backend::load_backend_config();
+    let response = backend
+        .apply_auth_for_url(agent.get(&full_url), &full_url)
+        .call()
+        .map_err(format_ureq_error)?;
     let mut reader = response.into_reader();
     let mut bytes = Vec::new();
     reader
@@ -2200,7 +2215,7 @@ fn build_iopaint_studio_url_with_options(
     if autorun {
         query.push_str("&autorun=1");
     }
-    format!("{API_ORIGIN}/dashboard/tools/image.iopaint_studio?{query}")
+    crate::core::backend::load_backend_config().dashboard_tool_url("image.iopaint_studio", &query)
 }
 
 fn output_file_name(input_name: &str, output_ext: Option<&str>) -> String {
@@ -2216,11 +2231,7 @@ fn output_file_name(input_name: &str, output_ext: Option<&str>) -> String {
 }
 
 fn absolute_url(url: &str) -> String {
-    if url.starts_with("http://") || url.starts_with("https://") {
-        url.to_string()
-    } else {
-        format!("{API_ORIGIN}{url}")
-    }
+    crate::core::backend::load_backend_config().absolute_url(url)
 }
 
 fn format_ureq_error(err: ureq::Error) -> String {
@@ -2234,9 +2245,7 @@ fn format_ureq_error(err: ureq::Error) -> String {
             }
             format!("{code}: request failed")
         }
-        ureq::Error::Transport(t) => {
-            normalize_transport_error_message(&t.to_string())
-        }
+        ureq::Error::Transport(t) => normalize_transport_error_message(&t.to_string()),
     }
 }
 
@@ -2251,7 +2260,7 @@ fn normalize_transport_error_message(message: &str) -> String {
         || lower.contains("10060")
         || lower.contains("10061")
     {
-        "backend unavailable on 3010. Start the app service and try again.".to_string()
+        crate::core::backend::load_backend_config().unavailable_message()
     } else {
         message.to_string()
     }
@@ -2372,10 +2381,11 @@ mod tests {
 
     #[test]
     fn normalize_transport_error_message_handles_windows_connection_refused() {
-        let message = "Connection Failed: Connect error: 目标计算机积极拒绝，无法连接。 (os error 10061)";
+        let message =
+            "Connection Failed: Connect error: 目标计算机积极拒绝，无法连接。 (os error 10061)";
         assert_eq!(
             normalize_transport_error_message(message),
-            "backend unavailable on 3010. Start the app service and try again."
+            crate::core::backend::load_backend_config().unavailable_message()
         );
     }
 

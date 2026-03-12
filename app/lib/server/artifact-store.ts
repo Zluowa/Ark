@@ -1,5 +1,5 @@
 ﻿import { basename } from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import {
   CreateBucketCommand,
   GetObjectCommand,
@@ -117,10 +117,34 @@ const filenameFromKey = (key: string): string => {
   return value || "artifact.bin";
 };
 
-export const encodeArtifactToken = (key: string): string =>
-  Buffer.from(key, "utf8").toString("base64url");
+const getArtifactTokenSecret = (): string => {
+  const preferred = process.env.OMNIAGENT_CREDENTIAL_KEY?.trim();
+  if (preferred) {
+    return preferred;
+  }
+  const fallback = process.env.S3_SECRET_KEY?.trim();
+  if (fallback) {
+    return fallback;
+  }
+  return "omniagent-artifact-dev-secret";
+};
 
-export const decodeArtifactToken = (token: string): string | undefined => {
+const signArtifactTokenPayload = (payload: string): string =>
+  createHmac("sha256", getArtifactTokenSecret())
+    .update(payload, "utf8")
+    .digest("base64url");
+
+const verifySignature = (payload: string, signature: string): boolean => {
+  const expected = signArtifactTokenPayload(payload);
+  const expectedBuf = Buffer.from(expected, "utf8");
+  const signatureBuf = Buffer.from(signature, "utf8");
+  if (expectedBuf.length !== signatureBuf.length) {
+    return false;
+  }
+  return timingSafeEqual(expectedBuf, signatureBuf);
+};
+
+const decodeLegacyArtifactToken = (token: string): string | undefined => {
   const normalized = token.trim();
   if (!normalized) {
     return undefined;
@@ -140,6 +164,60 @@ export const decodeArtifactToken = (token: string): string | undefined => {
   return normalized;
 };
 
+export const encodeArtifactToken = (
+  key: string,
+  expiresAt = Date.now() + 60 * 60 * 1000,
+): string => {
+  const payload = Buffer.from(
+    JSON.stringify({
+      exp: Math.max(Date.now() + 1000, Math.floor(expiresAt)),
+      key,
+    }),
+    "utf8",
+  ).toString("base64url");
+  return `${payload}.${signArtifactTokenPayload(payload)}`;
+};
+
+export const artifactRoutePath = (
+  key: string,
+  expiresAt = Date.now() + 60 * 60 * 1000,
+): string => `/api/v1/artifacts/${encodeArtifactToken(key, expiresAt)}`;
+
+export const verifyArtifactToken = (token: string): string | undefined => {
+  const normalized = token.trim();
+  if (!normalized.includes(".")) {
+    return undefined;
+  }
+  const [payload, signature] = normalized.split(".", 2);
+  if (!payload || !signature || !verifySignature(payload, signature)) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(
+      Buffer.from(payload, "base64url").toString("utf8"),
+    ) as { exp?: unknown; key?: unknown };
+    const exp =
+      typeof parsed.exp === "number" && Number.isFinite(parsed.exp)
+        ? parsed.exp
+        : NaN;
+    const key = typeof parsed.key === "string" ? parsed.key.trim() : "";
+    if (!key || !Number.isFinite(exp) || exp < Date.now()) {
+      return undefined;
+    }
+    return key;
+  } catch {
+    return undefined;
+  }
+};
+
+export const decodeArtifactToken = (token: string): string | undefined => {
+  const signed = verifyArtifactToken(token);
+  if (signed) {
+    return signed;
+  }
+  return decodeLegacyArtifactToken(token);
+};
+
 class NoopArtifactStore implements ArtifactStoreBackend {
   async persist(_input: PersistArtifactInput): Promise<undefined> {
     return undefined;
@@ -153,7 +231,7 @@ class NoopArtifactStore implements ArtifactStoreBackend {
 class S3ArtifactStore implements ArtifactStoreBackend {
   private readonly bucket: string;
   private bucketReady?: Promise<void>;
-  private readonly client: S3Client;
+  private readonly storageClient: S3Client;
   private readonly internalSignClient?: S3Client;
   private readonly signedUrlTtlSec: number;
 
@@ -168,22 +246,23 @@ class S3ArtifactStore implements ArtifactStoreBackend {
   }) {
     this.bucket = config.bucket;
     this.signedUrlTtlSec = Math.max(1, Math.floor(config.signedUrlTtlSec));
-    this.client = new S3Client({
+    const internalEndpoint = config.internalEndpoint?.trim() || undefined;
+    this.storageClient = new S3Client({
       credentials: {
         accessKeyId: config.accessKey,
         secretAccessKey: config.secretKey,
       },
-      endpoint: config.endpoint,
+      endpoint: internalEndpoint ?? config.endpoint,
       forcePathStyle: true,
       region: config.region,
     });
-    if (config.internalEndpoint?.trim()) {
+    if (internalEndpoint) {
       this.internalSignClient = new S3Client({
         credentials: {
           accessKeyId: config.accessKey,
           secretAccessKey: config.secretKey,
         },
-        endpoint: config.internalEndpoint,
+        endpoint: internalEndpoint,
         forcePathStyle: true,
         region: config.region,
       });
@@ -197,8 +276,9 @@ class S3ArtifactStore implements ArtifactStoreBackend {
     const safeToolId = safeSegment(input.toolId);
     const key = `tools/${safeToolId}/${isoDate()}/${Date.now()}-${randomUUID()}.${extension}`;
     const body = toBuffer(input.body);
+    const expiresAt = Date.now() + this.signedUrlTtlSec * 1000;
 
-    await this.client.send(
+    await this.storageClient.send(
       new PutObjectCommand({
         Body: body,
         Bucket: this.bucket,
@@ -209,15 +289,6 @@ class S3ArtifactStore implements ArtifactStoreBackend {
           tool_id: safeToolId,
         },
       }),
-    );
-
-    const url = await getSignedUrl(
-      this.client,
-      new GetObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-      }),
-      { expiresIn: this.signedUrlTtlSec },
     );
 
     const internalUrl = this.internalSignClient
@@ -234,12 +305,12 @@ class S3ArtifactStore implements ArtifactStoreBackend {
     return {
       bucket: this.bucket,
       contentType: input.contentType,
-      expiresAt: Date.now() + this.signedUrlTtlSec * 1000,
+      expiresAt,
       internalUrl,
       key,
       sizeBytes: body.byteLength,
       storage: "s3",
-      url,
+      url: artifactRoutePath(key, expiresAt),
     };
   }
 
@@ -247,7 +318,7 @@ class S3ArtifactStore implements ArtifactStoreBackend {
     await this.ensureBucket();
 
     try {
-      const response = await this.client.send(
+      const response = await this.storageClient.send(
         new GetObjectCommand({
           Bucket: this.bucket,
           Key: key,
@@ -277,7 +348,7 @@ class S3ArtifactStore implements ArtifactStoreBackend {
     if (!this.bucketReady) {
       this.bucketReady = (async () => {
         try {
-          await this.client.send(
+          await this.storageClient.send(
             new HeadBucketCommand({ Bucket: this.bucket }),
           );
           return;
@@ -288,7 +359,7 @@ class S3ArtifactStore implements ArtifactStoreBackend {
         }
 
         try {
-          await this.client.send(
+          await this.storageClient.send(
             new CreateBucketCommand({ Bucket: this.bucket }),
           );
         } catch (error) {

@@ -88,6 +88,47 @@ function Send-IslandCommand {
   Invoke-RestMethod -Uri "http://127.0.0.1:9800" -Method Post -ContentType "application/json" -Body $json | Out-Null
 }
 
+function Get-IslandDebugState {
+  param([string]$FilePath)
+
+  $deadline = (Get-Date).AddSeconds(5)
+  do {
+    if (Test-Path $FilePath) {
+      Remove-Item $FilePath -Force -ErrorAction SilentlyContinue
+    }
+    Send-IslandCommand @{ type = "write_debug_state"; path = $FilePath }
+    Start-Sleep -Milliseconds 180
+    if (Test-Path $FilePath) {
+      try {
+        return Get-Content $FilePath -Raw -Encoding UTF8 | ConvertFrom-Json
+      } catch {
+        Start-Sleep -Milliseconds 120
+      }
+    }
+  } while ((Get-Date) -lt $deadline)
+
+  throw "debug state file was not created within timeout: $FilePath"
+}
+
+function Wait-ForPillState {
+  param(
+    [string]$FilePath,
+    [string[]]$States,
+    [int]$TimeoutSeconds = 20
+  )
+
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  while ((Get-Date) -lt $deadline) {
+    $state = Get-IslandDebugState -FilePath $FilePath
+    if ($States -contains [string]$state.pill_state) {
+      return $state
+    }
+    Start-Sleep -Milliseconds 250
+  }
+
+  throw "Timed out waiting for pill state: $($States -join ', ')"
+}
+
 function Set-ClipboardText {
   param([string]$Value)
   for ($i = 0; $i -lt 12; $i++) {
@@ -180,8 +221,8 @@ function Get-OutputCenterPoint {
 
 function Get-VideoDownloadPoint {
   $rect = Get-IslandRect
-  $pillWidth = 292
-  $pillHeight = 64
+  $pillWidth = 286
+  $pillHeight = 60
   $pillLeft = [int](($rect.Width - $pillWidth) / 2)
   $pillTop = 40
   $btnCenterX = $pillLeft + $pillWidth - 32
@@ -189,13 +230,24 @@ function Get-VideoDownloadPoint {
   return Get-ClientPoint -ClientX $btnCenterX -ClientY $btnCenterY
 }
 
+function Get-ClipChatPoint {
+  $rect = Get-IslandRect
+  $pillWidth = 320
+  $pillHeight = 48
+  $pillLeft = [int](($rect.Width - $pillWidth) / 2)
+  $pillTop = 40
+  $btnCenterX = $pillLeft + $pillWidth - 38
+  $btnCenterY = $pillTop + [int]($pillHeight / 2)
+  return Get-ClientPoint -ClientX $btnCenterX -ClientY $btnCenterY
+}
+
 function Wait-NewMp4 {
   param(
     [datetime]$After,
-    [int]$TimeoutSeconds = 18
+    [int]$TimeoutSeconds = 120
   )
 
-  $downloadDir = Join-Path $env:USERPROFILE "Downloads"
+  $downloadDir = Get-ConfiguredDownloadDir
   $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
   while ((Get-Date) -lt $deadline) {
     $candidate = Get-ChildItem -Path $downloadDir -Filter *.mp4 -ErrorAction SilentlyContinue |
@@ -208,6 +260,21 @@ function Wait-NewMp4 {
     Start-Sleep -Milliseconds 500
   }
   return $null
+}
+
+function Get-ConfiguredDownloadDir {
+  $configPath = Join-Path $env:USERPROFILE ".winisland\config.toml"
+  if (Test-Path $configPath) {
+    $content = Get-Content $configPath -Raw -Encoding UTF8
+    $match = [regex]::Match($content, "download_dir\s*=\s*['""](?<path>[^'""]+)['""]")
+    if ($match.Success) {
+      $configured = $match.Groups["path"].Value.Trim()
+      if ($configured) {
+        return $configured
+      }
+    }
+  }
+  return Join-Path $env:USERPROFILE "Downloads"
 }
 
 $longInput = @"
@@ -230,6 +297,8 @@ Phase 5 removes compatibility shims only after the new path has survived product
 
 $startedAt = Get-Date
 $shots = @{}
+$states = @{}
+$debugPath = Join-Path $OutputDir "_state.json"
 
 Send-IslandCommand @{ type = "collapse" }
 Start-Sleep -Milliseconds 500
@@ -272,17 +341,24 @@ Start-Sleep -Milliseconds 500
 Set-ClipboardText -Value $VideoText
 Send-IslandCommand @{ type = "clipboard_paste" }
 Start-Sleep -Milliseconds 900
+$states.videoInput = Get-IslandDebugState -FilePath $debugPath
 $shots.videoInput = Capture-Island -Name "05-video-input-pasted.png"
 
-Send-Key -VirtualKey 0x0D
-Start-Sleep -Seconds 4
-$shots.videoAction = Capture-Island -Name "06-video-action.png"
+$chatPoint = Get-ClipChatPoint
+Left-ClickPoint -Point $chatPoint
+$states.chatOpened = Wait-ForPillState -FilePath $debugPath -States @("chat") -TimeoutSeconds 10
+$shots.videoChat = Capture-Island -Name "06-video-chat-opened.png"
+
+Send-IslandCommand @{ type = "submit_clip_chat_with_text"; text = "download this video" }
+$states.videoAction = Wait-ForPillState -FilePath $debugPath -States @("video_action") -TimeoutSeconds 45
+$shots.videoAction = Capture-Island -Name "07-video-action.png"
 
 $downloadPoint = Get-VideoDownloadPoint
 Left-ClickPoint -Point $downloadPoint
-$downloaded = Wait-NewMp4 -After $startedAt
+$downloaded = Wait-NewMp4 -After $startedAt -TimeoutSeconds 120
 Start-Sleep -Milliseconds 900
-$shots.videoSaved = Capture-Island -Name "07-video-saved.png"
+$states.videoSaved = Get-IslandDebugState -FilePath $debugPath
+$shots.videoSaved = Capture-Island -Name "08-video-saved.png"
 
 $ffprobeJson = $null
 if ($downloaded) {
@@ -297,6 +373,7 @@ $report = [ordered]@{
   outputDir = $OutputDir
   videoText = $VideoText
   screenshots = $shots
+  states = $states
   downloadedVideo = if ($downloaded) {
     [ordered]@{
       path = $downloaded.FullName

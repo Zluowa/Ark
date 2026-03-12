@@ -2,6 +2,7 @@ import { Readable } from "node:stream";
 import {
   artifactStore,
   decodeArtifactToken,
+  verifyArtifactToken,
 } from "@/lib/server/artifact-store";
 import { authorizeRequest } from "@/lib/server/access-control";
 import { toResponse } from "@/lib/shared/result";
@@ -30,13 +31,18 @@ const toWebStream = (body: unknown): ReadableStream => {
 };
 
 export async function GET(req: Request, context: RouteContext) {
-  const access = authorizeRequest(req, "execute:read");
-  if (!access.ok) {
-    return toResponse(access);
+  const { token } = await context.params;
+  const signedKey = verifyArtifactToken(token);
+  let key = signedKey;
+
+  if (!key) {
+    const access = authorizeRequest(req, "execute:read");
+    if (!access.ok) {
+      return toResponse(access);
+    }
+    key = decodeArtifactToken(token);
   }
 
-  const { token } = await context.params;
-  const key = decodeArtifactToken(token);
   if (!key) {
     return Response.json(
       {
