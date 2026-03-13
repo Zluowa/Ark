@@ -1,4 +1,4 @@
-type PublicNavItem = {
+﻿type PublicNavItem = {
   label: string;
   href: string;
 };
@@ -311,7 +311,7 @@ export const skillQuickstarts = [
       "Bring up a strict local Ark server, issue a runtime key, and let your agent call one backend for files, execute, async jobs, and artifacts.",
     command:
       "node scripts/start-local-agent-server.mjs --issue-key --port 3211",
-    note: "Best when your team self-hosts Ark and wants one local execution endpoint for every agent.",
+    note: "Run this from the Ark repo root. Verified locally on 2026-03-13 with the full `pnpm local:server:smoke` contract.",
   },
   {
     id: "mcp",
@@ -319,16 +319,16 @@ export const skillQuickstarts = [
     summary:
       "Use the stdio MCP adapter when the host agent already understands MCP and just needs the live Ark tool catalog.",
     command:
-      '$env:ARK_BASE_URL="http://127.0.0.1:3010"; $env:ARK_API_KEY="your_runtime_key"; pnpm mcp:start',
-    note: "PowerShell example. On bash, export the same env vars before running `pnpm mcp:start`.",
+      '$env:ARK_BASE_URL="http://127.0.0.1:3211"; $env:ARK_API_KEY="your_runtime_key"; pnpm mcp:start',
+    note: "Run from the Ark repo root after the local runtime is healthy. Verified locally on 2026-03-13 with `pnpm mcp:smoke` against port 3211.",
   },
   {
     id: "typescript-sdk",
     title: "Install the TypeScript SDK",
     summary:
       "Use the thin official client when your product, backend service, or agent runtime already lives in TypeScript.",
-    command: "pnpm add @ark/client",
-    note: "Then create `new ArkClient({ baseUrl, apiKey })` and call the same execution API directly.",
+    command: "pnpm add file:../path-to-Ark/sdk/typescript",
+    note: "The SDK is repo-local today and not yet published to npm. Verified locally on 2026-03-13 with `pnpm add file:../projects/omniagent-new/sdk/typescript`.",
   },
   {
     id: "python-sdk",
@@ -336,7 +336,7 @@ export const skillQuickstarts = [
     summary:
       "Use the Python client for workers, notebooks, orchestration services, or backend agents that need direct Ark access.",
     command: "pip install -e sdk/python",
-    note: "Today the package is installed from the repo checkout; published packaging is still being productized.",
+    note: "Run this from the Ark repo root. Verified locally on 2026-03-13 with `python -m pip install -e sdk/python`.",
   },
 ] as const;
 
@@ -371,11 +371,11 @@ export const skillPackPrinciples = [
 ] as const;
 
 export const skillPackFilesystem = `ark-runtime-skill/
-├─ SKILL.md
-├─ agents/
-│  └─ openai.yaml
-├─ scripts/
-└─ references/`;
+鈹溾攢 SKILL.md
+鈹溾攢 agents/
+鈹? 鈹斺攢 openai.yaml
+鈹溾攢 scripts/
+鈹斺攢 references/`;
 
 export const apiExamples = {
   registry: `curl -s http://127.0.0.1:3010/api/v1/tools/registry`,

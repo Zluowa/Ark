@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -100,6 +100,7 @@ export default function SkillsInstallPage() {
             title={item.title}
             subtitle={item.summary}
             code={item.command}
+            note={item.note}
           />
         ))}
       </section>
