@@ -1453,10 +1453,34 @@ type DlResult = {
   view_count?: number;
 };
 
+type MediaProviderAttemptTrace = {
+  provider: MediaProviderName;
+  status: "success" | "failed";
+  code?: string;
+};
+
+type MediaProviderTrace = {
+  operation: MediaOperation;
+  provider_route: MediaProviderName[];
+  provider_attempts: MediaProviderAttemptTrace[];
+  provider_platform_hint?: string;
+  provider_policy: "configured_provider" | "platform_override";
+  provider_default: MediaProviderName;
+  provider_configured: MediaProviderName;
+  provider_selected: MediaProviderName;
+  provider_fallback_enabled: boolean;
+};
+
+type MediaProviderExecution<T> = {
+  value: T;
+  trace: MediaProviderTrace;
+};
+
 type MediaProviderFailure = Error & {
   code?: string;
   provider?: MediaProviderName;
   retryable?: boolean;
+  trace?: MediaProviderTrace;
 };
 
 type MediaFn<T> = (u: string, p: Record<string, unknown>) => Promise<T>;
@@ -1635,15 +1659,65 @@ const combineProviderErrors = (
   return createMediaError(code, combinedMessage, errors[0]?.provider);
 };
 
+const inferProviderPlatformHint = (url: string): string | undefined =>
+  detect(url) ?? platformFromUrl(url);
+
+const resolveProviderPlan = (
+  operation: MediaOperation,
+  url: string,
+  config = getMediaProviderConfig(),
+): Omit<MediaProviderTrace, "provider_attempts"> => {
+  const configuredProvider = config.providers[operation];
+  const platformHint = inferProviderPlatformHint(url);
+  const overrideSets = config.platformOverrides[operation];
+  let selectedProvider = configuredProvider;
+  let policy: MediaProviderTrace["provider_policy"] = "configured_provider";
+
+  if (platformHint) {
+    const normalizedPlatform = platformHint.trim().toLowerCase();
+    const configuredMatches = (overrideSets[configuredProvider] ?? []).includes(
+      normalizedPlatform,
+    );
+    const otherProvider = OTHER_PROVIDER[configuredProvider];
+    const otherMatches = (overrideSets[otherProvider] ?? []).includes(
+      normalizedPlatform,
+    );
+
+    if (configuredMatches || otherMatches) {
+      policy = "platform_override";
+    }
+
+    if (!configuredMatches && otherMatches) {
+      selectedProvider = otherProvider;
+    }
+  }
+
+  const providerRoute = config.fallbackEnabled
+    ? [selectedProvider, OTHER_PROVIDER[selectedProvider]]
+    : [selectedProvider];
+
+  return {
+    operation,
+    provider_route: providerRoute,
+    provider_platform_hint: platformHint,
+    provider_policy: policy,
+    provider_default: config.defaultProvider,
+    provider_configured: configuredProvider,
+    provider_selected: selectedProvider,
+    provider_fallback_enabled: config.fallbackEnabled,
+  };
+};
+
 const orderedProviders = (
   operation: MediaOperation,
+  url: string,
   config = getMediaProviderConfig(),
-): MediaProviderName[] => {
-  const primary = config.providers[operation];
+): MediaProviderTrace["provider_route"] => {
+  const plan = resolveProviderPlan(operation, url, config);
   if (!config.fallbackEnabled) {
-    return [primary];
+    return [plan.provider_selected];
   }
-  return [primary, OTHER_PROVIDER[primary]];
+  return plan.provider_route;
 };
 
 const buildVidBeeRuntimeSettings = (
@@ -2066,20 +2140,43 @@ const runVidBeeDownload = async (
 
 const executeMediaOperation = async <T>(
   operation: MediaOperation,
+  url: string,
   runners: Record<MediaProviderName, () => Promise<T>>,
-): Promise<T> => {
-  const providers = orderedProviders(operation);
+): Promise<MediaProviderExecution<T>> => {
+  const config = getMediaProviderConfig();
+  const plan = resolveProviderPlan(operation, url, config);
+  const providers = orderedProviders(operation, url, config);
   const errors: MediaProviderFailure[] = [];
+  const attempts: MediaProviderAttemptTrace[] = [];
 
   for (const provider of providers) {
     try {
-      return await runners[provider]();
+      const value = await runners[provider]();
+      attempts.push({ provider, status: "success" });
+      return {
+        value,
+        trace: {
+          ...plan,
+          provider_attempts: attempts,
+        },
+      };
     } catch (error) {
-      errors.push(normalizeProviderError(error, provider));
+      const normalized = normalizeProviderError(error, provider);
+      attempts.push({
+        provider,
+        status: "failed",
+        code: normalized.code,
+      });
+      errors.push(normalized);
     }
   }
 
-  throw combineProviderErrors(errors);
+  const combined = combineProviderErrors(errors);
+  combined.trace = {
+    ...plan,
+    provider_attempts: attempts,
+  };
+  throw combined;
 };
 
 const videoInfoManifest: ToolManifest = {
@@ -2110,15 +2207,25 @@ const videoInfoHandler: ToolHandler = async (params) => {
   }
 
   try {
-    const info = await executeMediaOperation("video_info", {
-      legacy_internal: () => runLegacyInfo(url, params),
-      vidbee: () => runVidBeeInfo(url, params),
-    });
+    const { value: info, trace } = await executeMediaOperation(
+      "video_info",
+      url,
+      {
+        legacy_internal: () => runLegacyInfo(url, params),
+        vidbee: () => runVidBeeInfo(url, params),
+      },
+    );
     return {
       status: "success",
       output: {
         ...info,
         duration_str: formatDuration(info.duration),
+        provider_route: trace.provider_route,
+        provider_attempts: trace.provider_attempts,
+        provider_platform_hint: trace.provider_platform_hint,
+        provider_policy: trace.provider_policy,
+        provider_default: trace.provider_default,
+        provider_configured: trace.provider_configured,
       },
       duration_ms: Date.now() - start,
     };
@@ -2156,10 +2263,14 @@ const downloadVideoHandler: ToolHandler = async (params) => {
   }
 
   try {
-    const result = await executeMediaOperation("download_video", {
-      legacy_internal: () => runLegacyDownload("video", url, params),
-      vidbee: () => runVidBeeDownload("video", url, params),
-    });
+    const { value: result, trace } = await executeMediaOperation(
+      "download_video",
+      url,
+      {
+        legacy_internal: () => runLegacyDownload("video", url, params),
+        vidbee: () => runVidBeeDownload("video", url, params),
+      },
+    );
     return {
       status: "success",
       output_url: result.path,
@@ -2177,6 +2288,12 @@ const downloadVideoHandler: ToolHandler = async (params) => {
         filesize: result.filesize,
         resolution: result.resolution,
         format: result.format,
+        provider_route: trace.provider_route,
+        provider_attempts: trace.provider_attempts,
+        provider_platform_hint: trace.provider_platform_hint,
+        provider_policy: trace.provider_policy,
+        provider_default: trace.provider_default,
+        provider_configured: trace.provider_configured,
       },
       duration_ms: Date.now() - start,
     };
@@ -2214,10 +2331,14 @@ const downloadAudioHandler: ToolHandler = async (params) => {
   }
 
   try {
-    const result = await executeMediaOperation("download_audio", {
-      legacy_internal: () => runLegacyDownload("audio", url, params),
-      vidbee: () => runVidBeeDownload("audio", url, params),
-    });
+    const { value: result, trace } = await executeMediaOperation(
+      "download_audio",
+      url,
+      {
+        legacy_internal: () => runLegacyDownload("audio", url, params),
+        vidbee: () => runVidBeeDownload("audio", url, params),
+      },
+    );
     return {
       status: "success",
       output_url: result.path,
@@ -2234,6 +2355,12 @@ const downloadAudioHandler: ToolHandler = async (params) => {
         uploader: result.uploader,
         view_count: result.view_count,
         filesize: result.filesize,
+        provider_route: trace.provider_route,
+        provider_attempts: trace.provider_attempts,
+        provider_platform_hint: trace.provider_platform_hint,
+        provider_policy: trace.provider_policy,
+        provider_default: trace.provider_default,
+        provider_configured: trace.provider_configured,
       },
       duration_ms: Date.now() - start,
     };

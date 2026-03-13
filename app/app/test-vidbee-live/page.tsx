@@ -234,6 +234,15 @@ export default function TestVidBeeLivePage() {
               typeof flow.result?.output_file_url === "string"
                 ? flow.result.output_file_url
                 : undefined;
+            const providerPolicy =
+              typeof flow.result?.provider_policy === "string"
+                ? flow.result.provider_policy
+                : undefined;
+            const providerRoute = Array.isArray(flow.result?.provider_route)
+              ? flow.result.provider_route
+                  .filter((value): value is string => typeof value === "string")
+                  .join(",")
+              : "";
 
             return (
               <article
@@ -241,6 +250,8 @@ export default function TestVidBeeLivePage() {
                 data-testid={`flow-${spec.id}`}
                 data-phase={flow.phase}
                 data-provider={provider ?? ""}
+                data-provider-policy={providerPolicy ?? ""}
+                data-provider-route={providerRoute}
                 data-platform={platform ?? ""}
                 data-output-url={outputUrl ?? ""}
                 className="overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.015))]"
@@ -286,6 +297,11 @@ export default function TestVidBeeLivePage() {
                     {provider && (
                       <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-white/72">
                         provider: {provider}
+                      </span>
+                    )}
+                    {providerPolicy && (
+                      <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-white/72">
+                        policy: {providerPolicy}
                       </span>
                     )}
                     {platform && (

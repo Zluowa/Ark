@@ -25,9 +25,15 @@ export type VidBeeConfig = {
   runtimeSettings: VidBeeRuntimeSettings;
 };
 
+export type MediaProviderPlatformOverrides = Record<
+  MediaOperation,
+  Partial<Record<MediaProviderName, string[]>>
+>;
+
 export type MediaProviderConfig = {
   defaultProvider: MediaProviderName;
   fallbackEnabled: boolean;
+  platformOverrides: MediaProviderPlatformOverrides;
   providers: Record<MediaOperation, MediaProviderName>;
   vidbee: VidBeeConfig;
 };
@@ -41,6 +47,22 @@ const normalize = (value: string | undefined): string | undefined => {
 };
 
 const stripTrailingSlash = (value: string): string => value.replace(/\/+$/, "");
+
+const parseStringList = (...values: Array<string | undefined>): string[] => {
+  const seen = new Set<string>();
+  for (const value of values) {
+    if (!value) {
+      continue;
+    }
+    for (const item of value.split(",")) {
+      const normalized = item.trim().toLowerCase();
+      if (normalized) {
+        seen.add(normalized);
+      }
+    }
+  }
+  return Array.from(seen);
+};
 
 const parsePositiveInt = (
   value: string | undefined,
@@ -102,6 +124,19 @@ const parseProvider = (
   return fallback;
 };
 
+const operationEnvKey = (operation: MediaOperation): string => {
+  switch (operation) {
+    case "video_info":
+      return "VIDEO_INFO";
+    case "download_video":
+      return "DOWNLOAD_VIDEO";
+    case "download_audio":
+      return "DOWNLOAD_AUDIO";
+    default:
+      return "VIDEO_INFO";
+  }
+};
+
 export const getMediaProviderConfig = (): MediaProviderConfig => {
   const vidbeeBaseUrl = normalize(
     process.env.OMNIAGENT_VIDBEE_BASE_URL ?? process.env.VIDBEE_API_URL,
@@ -110,6 +145,29 @@ export const getMediaProviderConfig = (): MediaProviderConfig => {
     process.env.OMNIAGENT_MEDIA_PROVIDER,
     vidbeeBaseUrl ? "vidbee" : "legacy_internal",
   );
+  const platformOverrides = (
+    ["video_info", "download_video", "download_audio"] as MediaOperation[]
+  ).reduce<MediaProviderPlatformOverrides>(
+    (acc, operation) => {
+      const opKey = operationEnvKey(operation);
+      acc[operation] = {
+        legacy_internal: parseStringList(
+          process.env.OMNIAGENT_MEDIA_PROVIDER_LEGACY_PLATFORMS,
+          process.env[`OMNIAGENT_MEDIA_PROVIDER_${opKey}_LEGACY_PLATFORMS`],
+        ),
+        vidbee: parseStringList(
+          process.env.OMNIAGENT_MEDIA_PROVIDER_VIDBEE_PLATFORMS,
+          process.env[`OMNIAGENT_MEDIA_PROVIDER_${opKey}_VIDBEE_PLATFORMS`],
+        ),
+      };
+      return acc;
+    },
+    {
+      video_info: {},
+      download_video: {},
+      download_audio: {},
+    },
+  );
 
   return {
     defaultProvider,
@@ -117,6 +175,7 @@ export const getMediaProviderConfig = (): MediaProviderConfig => {
       process.env.OMNIAGENT_MEDIA_PROVIDER_FALLBACK_ENABLED,
       true,
     ),
+    platformOverrides,
     providers: {
       video_info: parseProvider(
         process.env.OMNIAGENT_MEDIA_PROVIDER_VIDEO_INFO,
@@ -148,7 +207,7 @@ export const getMediaProviderConfig = (): MediaProviderConfig => {
       ),
       requestTimeoutMs: parsePositiveInt(
         process.env.OMNIAGENT_VIDBEE_REQUEST_TIMEOUT_MS,
-        15_000,
+        60_000,
       ),
       runtimeSettings: {
         browserForCookies: normalize(

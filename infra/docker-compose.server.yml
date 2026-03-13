@@ -67,6 +67,45 @@ services:
       redis:
         condition: service_healthy
 
+  vidbee-api:
+    build:
+      context: ../services/vidbee-workspace
+      dockerfile: apps/api/Dockerfile
+    container_name: ark-vidbee-api
+    restart: unless-stopped
+    env_file:
+      - ../deploy/server.env
+    environment:
+      VIDBEE_API_HOST: 0.0.0.0
+      VIDBEE_API_PORT: 3100
+      VIDBEE_DOWNLOAD_DIR: /data/downloads
+      VIDBEE_HISTORY_STORE_PATH: /data/vidbee/vidbee.db
+      VIDBEE_PROXY: ${OMNIAGENT_VIDBEE_PROXY:-}
+      VIDBEE_CONFIG_PATH: ${VIDBEE_CONFIG_PATH:-}
+      VIDBEE_COOKIES_PATH: ${VIDBEE_COOKIES_PATH:-}
+      VIDBEE_BROWSER_FOR_COOKIES: ${VIDBEE_BROWSER_FOR_COOKIES:-}
+      VIDBEE_EMBED_SUBS: ${VIDBEE_EMBED_SUBS:-}
+      VIDBEE_EMBED_THUMBNAIL: ${VIDBEE_EMBED_THUMBNAIL:-}
+      VIDBEE_EMBED_METADATA: ${VIDBEE_EMBED_METADATA:-}
+      VIDBEE_EMBED_CHAPTERS: ${VIDBEE_EMBED_CHAPTERS:-}
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      NO_PROXY: ${NO_PROXY:-}
+    volumes:
+      - ../.data/vidbee-downloads:/data/downloads
+      - ../.data/vidbee-downloads:/vidbee-downloads
+      - ../.data/vidbee:/data/vidbee
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://127.0.0.1:3100/health > /dev/null || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   ark-web:
     build:
       context: ../app
@@ -80,8 +119,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      minio:
+        condition: service_started
       executor-fastapi:
         condition: service_started
+      vidbee-api:
+        condition: service_healthy
     environment:
       PORT: 3000
       HOSTNAME: 0.0.0.0
@@ -112,6 +155,7 @@ services:
       - ../.data/ark-workspace:/app/.workspace
       - ../.data/ark-services:/app/.omni-services
       - ../.data/ark-logs:/app/service-logs
+      - ../.data/vidbee-downloads:/vidbee-downloads:ro
     healthcheck:
       test:
         [
