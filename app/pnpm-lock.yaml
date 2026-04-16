@@ -99,8 +99,8 @@ importers:
         specifier: ^1.11.19
         version: 1.11.19
       dompurify:
-        specifier: ^3.3.2
-        version: 3.3.2
+        specifier: ^3.4.0
+        version: 3.4.0
       echarts:
         specifier: ^6.0.0
         version: 6.0.0
@@ -3084,6 +3084,7 @@ packages:
 
   '@univerjs/preset-docs-advanced@0.16.0':
     resolution: {integrity: sha512-3V9S9NZgvJFe2f2PNNFxIT+ZLjD4AA/HmzFs5kKh1llFBnPD8h/KaXwaMvY50Ea9VxJ8mfkImsPeOwcpeWFQLw==}
+    deprecated: Version no longer supported. Upgrade to @latest
     peerDependencies:
       react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
@@ -3091,6 +3092,7 @@ packages:
 
   '@univerjs/preset-docs-collaboration@0.16.0':
     resolution: {integrity: sha512-5cbff90xhrmhXHDfBQWCiYXRs7b/1oefIMdXfJas6A/8LDPV845d8gY9zrO3R1IkgYheO0QcV5L3u9Hxql7FIg==}
+    deprecated: Version no longer supported. Upgrade to @latest
     peerDependencies:
       react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
@@ -3098,6 +3100,7 @@ packages:
 
   '@univerjs/preset-docs-core@0.16.0':
     resolution: {integrity: sha512-TeOqgzQrtrbd1GWZ88g46LlgmzJ+tsTLys9c/QmoHkKFrZMsSoBVpmfOiUpFZ5N4QE4aDu7I5otTbpGSggq95g==}
+    deprecated: Version no longer supported. Upgrade to @latest
     peerDependencies:
       react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
@@ -3105,6 +3108,7 @@ packages:
 
   '@univerjs/preset-docs-drawing@0.16.0':
     resolution: {integrity: sha512-JaCPi3cxEIr6q+Kg3v0BfE/1NbLScmjfaXxB8Bi8Sldwa65t+xmxn/6M1j6eT4KU7xvv/IgwA4pGNTvocQx14g==}
+    deprecated: Version no longer supported. Upgrade to @latest
     peerDependencies:
       react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
@@ -3112,6 +3116,7 @@ packages:
 
   '@univerjs/preset-docs-hyper-link@0.16.0':
     resolution: {integrity: sha512-acg9tTcZDA4xt5zYaH6AQ1wVjzbQeRErGS+Iiv1VgO7xC5nKiMSxXqMc7TmpBv9kY2eYiJBN0sRwofmF1NOdJw==}
+    deprecated: Version no longer supported. Upgrade to @latest
     peerDependencies:
       react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
@@ -3119,11 +3124,13 @@ packages:
 
   '@univerjs/preset-docs-node-core@0.16.0':
     resolution: {integrity: sha512-XePTKhUigf1jLBV8tZM+963C7KZehYm15u8u7nl2ZBGRcVlv1yavUL3w+e/cS2zDMEtu9//uamMzrKP0Nd4NcQ==}
+    deprecated: Version no longer supported. Upgrade to @latest
     peerDependencies:
       rxjs: '>=7.0.0'
 
   '@univerjs/preset-docs-thread-comment@0.16.0':
     resolution: {integrity: sha512-dIrLe3lHb/V2cOPwQlvLZwfl+Zkzjijo57v66TXeCJFdulcvOi/EIALKxomidukxDQrPcs0BDHVf9Am5U2Bdrw==}
+    deprecated: Version no longer supported. Upgrade to @latest
     peerDependencies:
       react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
@@ -3131,6 +3138,7 @@ packages:
 
   '@univerjs/preset-sheets-advanced@0.16.0':
     resolution: {integrity: sha512-mqxXkUa/i8OGQP+xNE8MA3nkM1Mx61HMiQYpWhkessnf9NjG8WnOZMMu/smQYNMJSIXLz7Vm2qyGRWTbyHUD1g==}
+    deprecated: Version no longer supported. Upgrade to @latest
     peerDependencies:
       react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
@@ -3138,6 +3146,7 @@ packages:
 
   '@univerjs/preset-sheets-collaboration@0.16.0':
     resolution: {integrity: sha512-Qje7NV2qMSZZkYjDaaw6Fk7iwbs4C87i6VBxeyKg1ea9h6yu+GhfARoUtNZ+3h8mvXd3ZclSZPeyPyig8+3nAg==}
+    deprecated: Version no longer supported. Upgrade to @latest
     peerDependencies:
       react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
@@ -3145,6 +3154,7 @@ packages:
 
   '@univerjs/preset-sheets-conditional-formatting@0.16.0':
     resolution: {integrity: sha512-KEqoYplBkgVxbj6YpszETRqmabn6X5NzRhD4OM8TzJSOqian2XCGnOi5svXyS2aapyF+4vmJTVAquAvQiwY2NA==}
+    deprecated: Version no longer supported. Upgrade to @latest
     peerDependencies:
       react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
@@ -3152,6 +3162,7 @@ packages:
 
   '@univerjs/preset-sheets-core@0.16.0':
     resolution: {integrity: sha512-aLhvuWcnINMa0T/15xwDEd6rgpcE4Q1H1ihVZFWTsHbH12iDAd2bWJgldLciJ3JgKANS3l4mLehy0ze2ammK2A==}
+    deprecated: Version no longer supported. Upgrade to @latest
     peerDependencies:
       react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
@@ -3159,6 +3170,7 @@ packages:
 
   '@univerjs/preset-sheets-data-validation@0.16.0':
     resolution: {integrity: sha512-hzOvd+4rHcFI0YF79mfI1A5WG2OCBPhCyiEMf9uxUC1Djvab6TwSevnkZf/6+MzR+bS9/k/gaU1PvpcuLsw4FA==}
+    deprecated: Version no longer supported. Upgrade to @latest
     peerDependencies:
       react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
@@ -3166,6 +3178,7 @@ packages:
 
   '@univerjs/preset-sheets-drawing@0.16.0':
     resolution: {integrity: sha512-dMySfoTQdelsclgyu4rzFrVWUx+769eiTBLs/sR7DXD+c1F8Ppel+osoqSzskc4G9Z5jox1PHOdvDKTwAT81RQ==}
+    deprecated: Version no longer supported. Upgrade to @latest
     peerDependencies:
       react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
@@ -3173,6 +3186,7 @@ packages:
 
   '@univerjs/preset-sheets-filter@0.16.0':
     resolution: {integrity: sha512-Daose62Est4bC3ygXgK8Og6mQBDSGPjRyfnMDlPaoXqaoTtV0JnBxlRv/E/ScjApRQyQhN+hiHftWRhMlciLkA==}
+    deprecated: Version no longer supported. Upgrade to @latest
     peerDependencies:
       react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
@@ -3180,6 +3194,7 @@ packages:
 
   '@univerjs/preset-sheets-find-replace@0.16.0':
     resolution: {integrity: sha512-x/Zy8are3doGFjJ6x7188QTWuAWCqRjLSz1aGgEYS/9WCo1aceVy8HrEP1pgFqYKiFwEulO/9lv5BvdjM5wAHw==}
+    deprecated: Version no longer supported. Upgrade to @latest
     peerDependencies:
       react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
@@ -3187,6 +3202,7 @@ packages:
 
   '@univerjs/preset-sheets-hyper-link@0.16.0':
     resolution: {integrity: sha512-GTeUsTZA7eOkI/FZsURLnCiQFZkkh+RoV+M2Sn+uhSQYQlV44PJIcmqXN7/2T2VSz1w+KgBMv5tXXqe5AIGCNA==}
+    deprecated: Version no longer supported. Upgrade to @latest
     peerDependencies:
       react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
@@ -3194,11 +3210,13 @@ packages:
 
   '@univerjs/preset-sheets-node-core@0.16.0':
     resolution: {integrity: sha512-zcO+warXhWZG26V9lWNk668xt7Yw6a3jtlnutlv4iSqdJ5iVn5Faw//uWscWz13hkwjIZyxV5TNaUsPpS6JQdA==}
+    deprecated: Version no longer supported. Upgrade to @latest
     peerDependencies:
       rxjs: '>=7.0.0'
 
   '@univerjs/preset-sheets-note@0.16.0':
     resolution: {integrity: sha512-V65b+W5Kp12O2G6BtY+S68jQfT1GbdMAPoE1VMC0tDdGOPivkEeQHF69OgczPjL5HnN7xbtHNa97cwCJoK4EpA==}
+    deprecated: Version no longer supported. Upgrade to @latest
     peerDependencies:
       react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
@@ -3206,6 +3224,7 @@ packages:
 
   '@univerjs/preset-sheets-sort@0.16.0':
     resolution: {integrity: sha512-dHfihRv+k3ZOML7tzDVF2s6ebgEBrkAQymNZh2TBzLobE8QY7EyyOYWRAkPc2ukSGjeoPUaFeb6yd5Qw+C8bQA==}
+    deprecated: Version no longer supported. Upgrade to @latest
     peerDependencies:
       react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
@@ -3213,6 +3232,7 @@ packages:
 
   '@univerjs/preset-sheets-table@0.16.0':
     resolution: {integrity: sha512-5gvRNLNPZRkYyrrEN52Fb6Yh0/sQ6xDTF+BaQ2eQdJPBhPp96nYKDFTK8S+WqZ/Wl6oNJ3W7aDldNGYU+ZrLfw==}
+    deprecated: Version no longer supported. Upgrade to @latest
     peerDependencies:
       react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
@@ -3220,6 +3240,7 @@ packages:
 
   '@univerjs/preset-sheets-thread-comment@0.16.0':
     resolution: {integrity: sha512-U0fITW06TUfOeC6yZbhgOJycvdAnbKk/jjY8ECD9+yvioG9weOFZ9uEeQWqPjS41olmPuXN1VFps1N6z6JfRUA==}
+    deprecated: Version no longer supported. Upgrade to @latest
     peerDependencies:
       react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
@@ -3227,6 +3248,7 @@ packages:
 
   '@univerjs/presets@0.16.0':
     resolution: {integrity: sha512-C3HlxxOcjb4HRPack2ogHjgkuA9+N0xuUVtbtMMGu5YsB8sepqkdPsePvp17PZoCMrqL4xnN6VMu8ScyAaKsmw==}
+    deprecated: Version no longer supported. Upgrade to @latest
     peerDependencies:
       react: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^16.9.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
@@ -3554,6 +3576,7 @@ packages:
   basic-ftp@5.2.0:
     resolution: {integrity: sha512-VoMINM2rqJwJgfdHq6RiUudKt2BV+FY5ZFezP/ypmwayk68+NzzAQy4XXLlqsGD4MCzq3DrmNFD/uUmBJuGoXw==}
     engines: {node: '>=10.0.0'}
+    deprecated: Security vulnerability fixed in 5.2.1, please upgrade
 
   body-parser@1.20.4:
     resolution: {integrity: sha512-ZTgYYLMOXY9qKU/57FAo8F+HA2dGX7bqGc71txDRC1rS4frdFI5R7NhluHxH6M0YItAP0sHB4uqAOcYKxO6uGA==}
@@ -3963,9 +3986,8 @@ packages:
   dom-helpers@5.2.1:
     resolution: {integrity: sha512-nRCa7CK3VTrM2NmGkIy4cbK7IZlgBE/PYMn55rrXefr5xXDP0LdtfPnblFDoVdcAfslJ7or6iqAUnx0CCGIWQA==}
 
-  dompurify@3.3.2:
-    resolution: {integrity: sha512-6obghkliLdmKa56xdbLOpUZ43pAR6xFy1uOrxBaIDjT+yaRuuybLjGS9eVBoSR/UPU5fq3OXClEHLJNGvbxKpQ==}
-    engines: {node: '>=20'}
+  dompurify@3.4.0:
+    resolution: {integrity: sha512-nolgK9JcaUXMSmW+j1yaSvaEaoXYHwWyGJlkoCTghc97KgGDDSnpoU/PlEnw63Ah+TGKFOyY+X5LnxaWbCSfXg==}
 
   dotenv@16.6.1:
     resolution: {integrity: sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==}
@@ -9229,7 +9251,7 @@ snapshots:
 
   '@types/dompurify@3.2.0':
     dependencies:
-      dompurify: 3.3.2
+      dompurify: 3.4.0
 
   '@types/estree-jsx@1.0.5':
     dependencies:
@@ -11308,7 +11330,7 @@ snapshots:
       '@babel/runtime': 7.28.6
       csstype: 3.2.3
 
-  dompurify@3.3.2:
+  dompurify@3.4.0:
     optionalDependencies:
       '@types/trusted-types': 2.0.7
 
@@ -12193,7 +12215,7 @@ snapshots:
       d3-sankey: 0.12.3
       dagre-d3-es: 7.0.13
       dayjs: 1.11.19
-      dompurify: 3.3.2
+      dompurify: 3.4.0
       katex: 0.16.33
       khroma: 2.1.0
       lodash-es: 4.17.23
