@@ -4,4 +4,4 @@ boto3==1.36.14
 httpx==0.28.1
 imageio-ffmpeg==0.6.0
 pillow==12.1.1
-pypdf==6.7.5
+pypdf==6.10.2
